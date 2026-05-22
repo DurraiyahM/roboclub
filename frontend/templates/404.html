@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %} · 404{% endblock %}
+{% block content %}
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;text-align:center">
+  <div style="font-family:var(--mono);font-size:72px;font-weight:700;color:var(--dim);margin-bottom:16px">404</div>
+  <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px">Page not found</div>
+  <div style="color:var(--muted);font-size:13px;margin-bottom:24px">That route doesn't exist in the pipeline.</div>
+  <a href="/" class="btn btn--cyan" style="text-decoration:none;padding:10px 24px">← Back to Pipeline</a>
+</div>
+{% endblock %}

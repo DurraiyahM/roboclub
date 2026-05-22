@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %} · Kafka{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-eyebrow">APACHE KAFKA</div>
+  <h2 class="page-title">Kafka Cluster — Topics &amp; Throughput</h2>
+</div>
+
+<!-- Cluster health stats -->
+<div class="g4 mb20" id="cluster-stats">
+  <div class="stat-card" style="border-left:3px solid var(--green)">
+    <div class="stat-card__label">Brokers</div>
+    <div class="stat-card__val" style="color:var(--green)" id="s-brokers"><span class="loader"></span></div>
+    <div class="stat-card__sub" style="color:var(--green)">All healthy</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--cyan)">
+    <div class="stat-card__label">Topics</div>
+    <div class="stat-card__val" style="color:var(--cyan)" id="s-topics"><span class="loader"></span></div>
+    <div class="stat-card__sub" style="color:var(--cyan)">Active</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--purple)">
+    <div class="stat-card__label">Total Messages</div>
+    <div class="stat-card__val" style="color:var(--purple)" id="s-total"><span class="loader"></span></div>
+    <div class="stat-card__sub" style="color:var(--purple)">Since deploy</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--green)">
+    <div class="stat-card__label">Consumer Groups</div>
+    <div class="stat-card__val" style="color:var(--green)" id="s-cgroups"><span class="loader"></span></div>
+    <div class="stat-card__sub" style="color:var(--green)">No lag</div>
+  </div>
+</div>
+
+<!-- Topics table -->
+<div class="panel mb16">
+  <div class="section-title">
+    <span class="section-title__icon">🌊</span>
+    <span class="section-title__text">Kafka Topics</span>
+    <div class="section-title__line"></div>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Topic Name</th><th>Partitions</th><th>Messages</th>
+        <th>Rate/s</th><th>Consumers</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="topics-body">
+      <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">
+        <span class="loader"></span>
+      </td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Consumer lag -->
+<div class="panel">
+  <div class="section-title">
+    <span class="section-title__icon">📡</span>
+    <span class="section-title__text">Consumer Lag Monitor</span>
+    <div class="section-title__line"></div>
+  </div>
+  <div id="consumers-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadKafka() {
+  const [cluster, topics, consumers] = await Promise.all([
+    api('/api/kafka/cluster'),
+    api('/api/kafka/topics'),
+    api('/api/kafka/consumers'),
+  ]);
+
+  if (cluster) {
+    document.getElementById('s-brokers').textContent  = cluster.brokers;
+    document.getElementById('s-topics').textContent   = cluster.topics;
+    document.getElementById('s-total').textContent    = cluster.total_messages.toLocaleString();
+    document.getElementById('s-cgroups').textContent  = cluster.consumer_groups;
+  }
+
+  if (topics) {
+    document.getElementById('topics-body').innerHTML = topics.map(t => `
+      <tr>
+        <td>${tag(t.name)}</td>
+        <td style="color:var(--muted);font-family:var(--mono)">${t.partitions}</td>
+        <td style="font-family:var(--mono);color:var(--text);font-weight:600">${t.msgs.toLocaleString()}</td>
+        <td><span style="color:var(--green);font-family:var(--mono);font-size:11px">${t.rate} msg/s</span></td>
+        <td>${t.consumers.map(c => tag(c,'tag--purple')).join(' ')}</td>
+        <td><span class="row-center">${dot()} <span style="color:var(--green);font-size:11px">Active</span></span></td>
+      </tr>`).join('');
+  }
+
+  if (consumers) {
+    document.getElementById('consumers-grid').innerHTML = consumers.map(c => `
+      <div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">${c.name}</div>
+        <div class="row-between" style="margin-bottom:4px">
+          <span style="font-size:11px;color:var(--muted)">Lag</span>
+          <span style="font-family:var(--mono);font-size:13px;color:var(--green);font-weight:700">${c.lag} ms</span>
+        </div>
+        <div class="row-between">
+          <span style="font-size:11px;color:var(--muted)">Status</span>
+          ${tag('HEALTHY','tag--green')}
+        </div>
+      </div>`).join('');
+  }
+}
+
+loadKafka();
+setInterval(loadKafka, 2000);
+</script>
+{% endblock %}

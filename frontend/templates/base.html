@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoboClub Pipeline{% block title %}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #030b1a;
+      --surface: rgba(255,255,255,0.03);
+      --border:  rgba(255,255,255,0.07);
+      --navy:    #0f2d56;
+      --blue:    #2563eb;
+      --cyan:    #38bdf8;
+      --green:   #22d3a5;
+      --yellow:  #fbbf24;
+      --red:     #f87171;
+      --purple:  #a78bfa;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --dim:     #334155;
+      --mono:    'JetBrains Mono', monospace;
+      --sans:    'Syne', sans-serif;
+    }
+    html, body { height: 100%; }
+    body { background: var(--bg); font-family: var(--sans); color: var(--text); overflow: hidden; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.25); border-radius: 2px; }
+
+    /* ── Animations ── */
+    @keyframes pulse    { 0%,100%{opacity:1}  50%{opacity:0.3} }
+    @keyframes flow     { 0%{stroke-dashoffset:20} 100%{stroke-dashoffset:0} }
+    @keyframes fadeIn   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+    @keyframes slideIn  { from{transform:translateX(20px);opacity:0} to{transform:none;opacity:1} }
+    @keyframes spin     { to{transform:rotate(360deg)} }
+
+    /* ── Layout ── */
+    .app-shell     { display:flex; height:100vh; overflow:hidden; position:relative; z-index:1; }
+    .bg-radial     { position:fixed; inset:0; z-index:0;
+                     background: radial-gradient(ellipse 80% 50% at 10% 0%, #0f2d5688, transparent 55%),
+                                 radial-gradient(ellipse 60% 40% at 90% 100%, #05122688, transparent 50%),
+                                 var(--bg); }
+    .top-line      { position:fixed; top:0; left:0; right:0; height:1px; z-index:20;
+                     background:linear-gradient(90deg, transparent, rgba(56,189,248,.55), transparent); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width:210px; flex-shrink:0; display:flex; flex-direction:column;
+      background:rgba(0,0,0,.5); backdrop-filter:blur(24px);
+      border-right:1px solid var(--border);
+    }
+    .sidebar-logo  { padding:22px 20px 18px; border-bottom:1px solid var(--border); }
+    .logo-robo     { font-family:var(--mono); font-size:22px; font-weight:700; color:var(--cyan); letter-spacing:2px; }
+    .logo-club     { font-family:var(--mono); font-size:22px; font-weight:700; color:var(--text); letter-spacing:2px; }
+    .logo-sub      { font-size:9px; color:var(--dim); letter-spacing:3px; margin-top:2px; font-family:var(--mono); }
+    .sidebar-nav   { flex:1; padding:12px 0; overflow-y:auto; }
+    .nav-btn {
+      width:100%; display:flex; align-items:center; gap:10px;
+      padding:10px 20px; background:transparent;
+      border:none; border-left:2px solid transparent; border-right:none;
+      cursor:pointer; color:var(--muted); font-size:13px; font-weight:400;
+      transition:all .2s; font-family:var(--sans); text-align:left; text-decoration:none;
+    }
+    .nav-btn:hover    { color:var(--text); background:rgba(255,255,255,.03); }
+    .nav-btn.active   { color:var(--cyan); background:rgba(56,189,248,.08); border-left-color:var(--cyan); font-weight:700; }
+    .nav-badge        { margin-left:auto; background:var(--red); color:#fff; border-radius:10px;
+                        padding:1px 6px; font-size:10px; font-weight:700; }
+    .sidebar-status   { padding:14px 20px; border-top:1px solid var(--border); }
+    .status-row       { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+    .status-row:last-child { margin-bottom:0; }
+
+    /* ── Main content ── */
+    .main-content  { flex:1; overflow-y:auto; padding:28px 32px; }
+
+    /* ── Reusable components ── */
+    .panel {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:12px; padding:18px;
+    }
+    .panel--dark   { background:#060f1e; }
+
+    .section-title { display:flex; align-items:center; gap:9px; margin-bottom:16px; }
+    .section-title__icon  { font-size:16px; }
+    .section-title__text  {
+      font-family:var(--mono); font-weight:700; font-size:13px;
+      color:var(--cyan); letter-spacing:1px; text-transform:uppercase;
+    }
+    .section-title__line  {
+      flex:1; height:1px; margin-left:4px;
+      background:linear-gradient(90deg, rgba(56,189,248,.27), transparent);
+    }
+
+    .dot {
+      display:inline-block; width:7px; height:7px; border-radius:50%;
+      background:var(--green); box-shadow:0 0 6px var(--green);
+    }
+    .dot--pulse   { animation:pulse 1.8s infinite; }
+    .dot--cyan    { background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+    .dot--red     { background:var(--red);  box-shadow:0 0 6px var(--red); }
+    .dot--yellow  { background:var(--yellow); box-shadow:0 0 6px var(--yellow); }
+
+    .tag {
+      display:inline-block; border-radius:4px; padding:1px 7px;
+      font-size:10px; font-weight:700; font-family:var(--mono); letter-spacing:.5px;
+      background:rgba(56,189,248,.09); color:var(--cyan); border:1px solid rgba(56,189,248,.27);
+    }
+    .tag--purple  { background:rgba(167,139,250,.09); color:var(--purple); border-color:rgba(167,139,250,.27); }
+    .tag--green   { background:rgba(34,211,165,.09);  color:var(--green);  border-color:rgba(34,211,165,.27); }
+    .tag--yellow  { background:rgba(251,191,36,.09);  color:var(--yellow); border-color:rgba(251,191,36,.27); }
+    .tag--red     { background:rgba(248,113,113,.09); color:var(--red);    border-color:rgba(248,113,113,.27); }
+
+    .page-header { margin-bottom:20px; }
+    .page-eyebrow { font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:6px; letter-spacing:1px; }
+    .page-title   { font-size:22px; font-weight:800; color:var(--text); }
+    .page-sub     { color:var(--muted); font-size:13px; margin-top:4px; }
+
+    .stat-card {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:12px; padding:16px 18px;
+    }
+    .stat-card__label { font-size:11px; color:var(--muted); margin-bottom:4px; }
+    .stat-card__val   { font-family:var(--mono); font-size:20px; font-weight:700; }
+    .stat-card__sub   { font-size:11px; margin-top:2px; }
+
+    /* ── Loader spinner ── */
+    .loader { display:inline-block; width:14px; height:14px; border:2px solid var(--border);
+              border-top-color:var(--cyan); border-radius:50%; animation:spin 0.7s linear infinite; }
+
+    /* ── Mono pre ── */
+    .code-pre {
+      font-family:var(--mono); font-size:11px; color:#94a3b8;
+      line-height:1.7; overflow-x:auto;
+    }
+
+    /* ── Button ── */
+    .btn {
+      padding:8px 18px; background:rgba(255,255,255,.04);
+      border:1px solid var(--border); border-radius:8px; color:var(--muted);
+      font-family:var(--mono); font-size:11px; cursor:pointer; transition:all .2s;
+    }
+    .btn--cyan    { background:rgba(56,189,248,.13); border-color:var(--cyan); color:var(--cyan); }
+    .btn--green   { background:rgba(34,211,165,.13); border-color:var(--green); color:var(--green); }
+    .btn:disabled { opacity:.5; cursor:default; }
+
+    /* ── Grid helpers ── */
+    .g2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .g3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .gap8  { gap:8px; }
+    .gap10 { gap:10px; }
+    .gap12 { gap:12px; }
+    .mb12 { margin-bottom:12px; }
+    .mb16 { margin-bottom:16px; }
+    .mb20 { margin-bottom:20px; }
+
+    /* ── Table ── */
+    .data-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .data-table th {
+      padding:8px 12px; text-align:left; color:var(--muted);
+      font-family:var(--mono); font-size:10px; font-weight:600;
+      border-bottom:1px solid var(--border);
+    }
+    .data-table td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.03); }
+
+    /* ── CPU bar ── */
+    .cpu-track { height:4px; background:rgba(255,255,255,.07); border-radius:2px; overflow:hidden; }
+    .cpu-bar   { height:100%; border-radius:2px; transition:width 1s ease; background:var(--green); }
+    .cpu-bar--warn { background:var(--yellow); }
+    .cpu-bar--crit { background:var(--red); }
+
+    /* ── Flex row utility ── */
+    .row-between { display:flex; justify-content:space-between; align-items:center; }
+    .row-center  { display:flex; align-items:center; gap:8px; }
+  </style>
+</head>
+<body>
+<div class="bg-radial"></div>
+<div class="top-line"></div>
+
+<div class="app-shell">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-robo">ROBO</div>
+      <div class="logo-club">CLUB</div>
+      <div class="logo-sub">DATA PIPELINE · PAKISTAN</div>
+    </div>
+    <div class="sidebar-nav">
+      {% for n in nav %}
+      <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}">
+        <span>{{ n.icon }}</span>
+        {{ n.label }}
+        {% if n.id == 'notifications' %}
+        <span class="nav-badge" id="notif-badge" style="display:none">0</span>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    <div class="sidebar-status">
+      <div class="status-row">
+        <span class="dot dot--pulse"></span>
+        <span style="font-size:11px;color:var(--green);font-family:var(--mono)">KAFKA LIVE</span>
+      </div>
+      <div class="status-row">
+        <span class="dot dot--cyan dot--pulse"></span>
+        <span style="font-size:11px;color:var(--cyan);font-family:var(--mono)">12 CONTAINERS</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script>
+  const API = "{{ api_url }}";
+  const USE_POLLING = {{ use_polling|default(false)|tojson }};
+
+  // ── Fetch helpers ──────────────────────────────────────────────────────────
+  async function api(path) {
+    try {
+      const r = await fetch(API + path);
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    } catch(e) {
+      console.error('API error', path, e);
+      return null;
+    }
+  }
+
+  async function apiPost(path, body) {
+    try {
+      const opts = { method: 'POST', headers: {} };
+      if (body !== undefined) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const r = await fetch(API + path, opts);
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    } catch(e) { console.error('API POST', path, e); return null; }
+  }
+
+  async function apiPut(path, body) {
+    try {
+      const opts = { method: 'PUT', headers: {} };
+      if (body !== undefined) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const r = await fetch(API + path, opts);
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    } catch(e) { console.error('API PUT', path, e); return null; }
+  }
+
+  // ── Unread badge ──────────────────────────────────────────────────────────
+  async function refreshBadge() {
+    const d = await api('/api/notifications/unread-count');
+    if (!d) return;
+    const badge = document.getElementById('notif-badge');
+    if (badge) {
+      badge.textContent = d.count;
+      badge.style.display = d.count > 0 ? 'inline' : 'none';
+    }
+  }
+  function setBadgeCount(count) {
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    badge.textContent = count;
+    badge.style.display = count > 0 ? 'inline' : 'none';
+  }
+
+  refreshBadge();
+
+  if (USE_POLLING) {
+    setInterval(async () => {
+      const tick = await api('/api/live/tick');
+      if (!tick) return;
+      window.dispatchEvent(new CustomEvent('roboclub:tick', { detail: tick }));
+      if (typeof tick.count === 'number') setBadgeCount(tick.count);
+      else if (tick.notification) refreshBadge();
+    }, 4000);
+    setInterval(refreshBadge, 20000);
+  } else {
+    try {
+      const notifEs = new EventSource(API + '/api/notifications/stream');
+      notifEs.onmessage = ev => {
+        const d = JSON.parse(ev.data);
+        if (d.event === 'init' && typeof d.count === 'number') setBadgeCount(d.count);
+        if (d.event === 'notification' && typeof d.count === 'number') setBadgeCount(d.count);
+      };
+      notifEs.onerror = () => setInterval(refreshBadge, 10000);
+    } catch (_) {
+      setInterval(refreshBadge, 10000);
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function tag(label, cls='') {
+    return `<span class="tag ${cls}">${label}</span>`;
+  }
+  function dot(color='') {
+    const map = {red:'dot--red', yellow:'dot--yellow', cyan:'dot--cyan', green:''};
+    return `<span class="dot dot--pulse ${map[color]||''}"></span>`;
+  }
+  function cpuBar(pct) {
+    const cls = pct>70?'cpu-bar--crit':pct>40?'cpu-bar--warn':'';
+    return `<div class="cpu-track"><div class="cpu-bar ${cls}" style="width:${pct}%"></div></div>`;
+  }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

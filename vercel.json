@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pip install -r requirements.txt",
+  "buildCommand": "python scripts/build_static.py",
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" },
+    { "source": "/docs", "destination": "/api/index" },
+    { "source": "/redoc", "destination": "/api/index" },
+    { "source": "/openapi.json", "destination": "/api/index" },
+    { "source": "/", "destination": "/pipeline.html" },
+    { "source": "/pipeline", "destination": "/pipeline.html" },
+    { "source": "/kafka", "destination": "/kafka.html" },
+    { "source": "/docker", "destination": "/docker.html" },
+    { "source": "/ingestion", "destination": "/ingestion.html" },
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/attendance", "destination": "/attendance.html" },
+    { "source": "/inventory", "destination": "/inventory.html" },
+    { "source": "/trainers", "destination": "/trainers.html" },
+    { "source": "/ceo", "destination": "/ceo.html" },
+    { "source": "/notifications", "destination": "/notifications.html" }
+  ]
+}

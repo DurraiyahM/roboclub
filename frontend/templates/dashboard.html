@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %} · Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-eyebrow">LIVE DASHBOARD</div>
+  <h2 class="page-title">Co-Founder Operations View</h2>
+  <p class="page-sub">Pakistan operations · Kafka → PostgreSQL → Dashboard API</p>
+</div>
+
+<!-- KPI cards -->
+<div id="kpi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px">
+  <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
+</div>
+
+<!-- School live status -->
+<div class="panel">
+  <div class="section-title">
+    <span class="section-title__icon">🏫</span>
+    <span class="section-title__text">School Live Status</span>
+    <div class="section-title__line"></div>
+  </div>
+  <div id="school-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+    <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const KPI_META = {
+  active_schools:   {label:"Active Schools",   sub:"+1 onboarding",  color:"var(--cyan)",   icon:"🏫"},
+  students_live:    {label:"Students (Live)",  sub:"Enrolled total",  color:"var(--purple)", icon:"🧒"},
+  trainers_online:  {label:"Trainers Online",  sub:"Today",           color:"var(--green)",  icon:"👨‍🏫"},
+  revenue_apr:      {label:"Revenue (Apr) ₨",  sub:"↑34% MoM · Lac",  color:"var(--green)",  icon:"💰"},
+  inventory_alerts: {label:"Inventory Alerts", sub:"Live · tap Inventory", color:"var(--yellow)", icon:"📦", link:"/inventory"},
+  pending_mous:     {label:"Pending MOUs",     sub:"Action needed",   color:"var(--red)",    icon:"📄"},
+  outstanding_pkr:  {label:"Outstanding ₨",   sub:"3 schools",       color:"var(--yellow)", icon:"⏳"},
+  new_leads:        {label:"New Leads",        sub:"This month",      color:"var(--cyan)",   icon:"📣"},
+};
+
+const STATUS_COLOR = {green:"var(--green)", yellow:"var(--yellow)", cyan:"var(--cyan)", muted:"var(--muted)"};
+
+async function loadDashboard() {
+  const [kpis, schools] = await Promise.all([
+    api('/api/dashboard/kpis'),
+    api('/api/dashboard/schools'),
+  ]);
+
+  if (kpis) {
+    document.getElementById('kpi-grid').innerHTML = Object.entries(KPI_META).map(([key, m]) => `
+      <div class="panel" style="border-left:3px solid ${m.color};position:relative">
+        <div style="font-size:20px;margin-bottom:8px">${m.icon}</div>
+        <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:${m.color}">${kpis[key]}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${m.label}</div>
+        <div style="font-size:11px;color:${m.color};margin-top:2px">${m.sub}</div>
+      </div>`).join('');
+  }
+
+  if (schools) renderSchools(schools);
+}
+
+function renderSchools(schools) {
+  if (!schools) return;
+  document.getElementById('school-grid').innerHTML = schools.map(s => {
+    const c = STATUS_COLOR[s.status] || 'var(--muted)';
+    const pulse = s.updated_at ? 'animation:fadeIn .4s ease' : '';
+    return `
+    <div style="background:rgba(255,255,255,.02);border:1px solid ${c}33;border-radius:10px;padding:12px 14px;${pulse}">
+      <div class="row-between" style="margin-bottom:4px">
+        <div style="font-weight:700;color:var(--text);font-size:13px">${s.name}</div>
+        ${s.updated_at ? '<span class="dot dot--pulse" style="width:6px;height:6px" title="Live"></span>' : ''}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${s.city}</div>
+      <div class="row-between" style="font-size:11px;margin-bottom:4px">
+        <span style="color:var(--muted)">Attendance</span>
+        <span style="color:${c};font-family:var(--mono);font-weight:700">${s.att || '—'}%</span>
+      </div>
+      ${s.total ? `<div class="row-between" style="font-size:11px;margin-bottom:4px">
+        <span style="color:var(--muted)">Present</span>
+        <span style="color:var(--text);font-family:var(--mono)">${s.present}/${s.total}</span>
+      </div>` : ''}
+      <div class="row-between" style="font-size:11px;margin-bottom:4px">
+        <span style="color:var(--muted)">MOU</span>
+        <span style="color:${c}">${s.mou}</span>
+      </div>
+      <div class="row-between" style="font-size:11px">
+        <span style="color:var(--muted)">Next</span>
+        <span style="color:var(--text)">${s.next}</span>
+      </div>
+      ${s.trainer ? `<div style="font-size:10px;color:var(--dim);margin-top:6px">👨‍🏫 ${s.trainer}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+loadDashboard();
+
+if (USE_POLLING) {
+  window.addEventListener('roboclub:tick', ev => {
+    if (ev.detail?.attendance?.schools) renderSchools(ev.detail.attendance.schools);
+  });
+} else {
+  const attEs = new EventSource(API + '/api/attendance/stream');
+  attEs.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    if (d.schools) renderSchools(d.schools);
+  };
+}
+setInterval(loadDashboard, 8000);
+</script>
+{% endblock %}

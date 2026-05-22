@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %} · Ingestion{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-eyebrow">DATA INGESTION</div>
+  <h2 class="page-title">Ingestion Pipeline — Sources to Kafka</h2>
+</div>
+
+<!-- Schema examples -->
+<div class="g2 mb20">
+  <div class="panel panel--dark" style="border-color:rgba(37,99,235,.2)">
+    <div class="section-title">
+      <span class="section-title__icon">📄</span>
+      <span class="section-title__text">Sample: attendance.events</span>
+      <div class="section-title__line"></div>
+    </div>
+    <pre class="code-pre">{
+  "event_id":    "evt_20250516_0482",
+  "timestamp":   "2025-05-16T15:04:22Z",
+  "topic":       "attendance.events",
+  "source":      "SchoolSvc",
+  "school_id":   "SCH001",
+  "school_name": "Beacon House School",
+  "trainer_id":  "TRN001",
+  "batch":       "B",
+  "present":     38,
+  "total":       42,
+  "pct":         90.5,
+  "session_type":"robotics_lab"
+}</pre>
+  </div>
+  <div class="panel panel--dark" style="border-color:rgba(34,211,165,.2)">
+    <div class="section-title">
+      <span class="section-title__icon">📄</span>
+      <span class="section-title__text">Sample: finance.payments</span>
+      <div class="section-title__line"></div>
+    </div>
+    <pre class="code-pre">{
+  "event_id":   "fin_20250516_1201",
+  "timestamp":  "2025-05-16T11:30:00Z",
+  "topic":      "finance.payments",
+  "source":     "FinanceSvc",
+  "school_id":  "SCH002",
+  "school_name":"Lahore Grammar School",
+  "amount":     1400000,
+  "currency":   "PKR",
+  "type":       "monthly_fee",
+  "status":     "received",
+  "invoice_id": "INV-2024-0089"
+}</pre>
+  </div>
+</div>
+
+<!-- Ingestion sources -->
+<div class="panel">
+  <div class="section-title">
+    <span class="section-title__icon">🔄</span>
+    <span class="section-title__text">Ingestion Sources</span>
+    <div class="section-title__line"></div>
+  </div>
+  <div id="sources-list" style="display:grid;gap:10px">
+    <div style="text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadIngestion() {
+  const sources = await api('/api/ingestion/sources');
+  if (!sources) return;
+  document.getElementById('sources-list').innerHTML = sources.map(s => `
+    <div style="display:grid;grid-template-columns:auto 1fr auto auto auto auto;
+                align-items:center;gap:14px;padding:12px 16px;
+                background:rgba(255,255,255,.02);
+                border:1px solid var(--border);border-left:3px solid ${s.color};border-radius:8px">
+      <span style="font-size:18px">${s.icon}</span>
+      <div>
+        <div style="font-weight:700;color:var(--text);font-size:13px">${s.name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Producer: ${s.producer} · Format: ${s.format}</div>
+      </div>
+      ${tag(s.topic)}
+      <div style="text-align:center">
+        <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:${s.color}">${s.records.toLocaleString()}</div>
+        <div style="font-size:10px;color:var(--muted)">events</div>
+      </div>
+      ${tag(s.freq,'tag--purple')}
+      <span class="dot dot--pulse"></span>
+    </div>`).join('');
+}
+
+loadIngestion();
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %} · Pipeline{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-eyebrow">ARCHITECTURE</div>
+  <h2 class="page-title">RoboClub Real-Time Data Pipeline</h2>
+  <p class="page-sub">End-to-end event-driven architecture · Apache Kafka · Docker Compose · PostgreSQL · Redis</p>
+</div>
+
+<!-- Architecture diagram -->
+<div class="panel mb20" style="padding:0;overflow:hidden">
+  <div style="overflow-x:auto;padding:28px 24px 20px">
+    <svg width="1020" height="160" style="display:block;min-width:1020px">
+      <defs>
+        <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="rgba(56,189,248,.6)"/>
+        </marker>
+      </defs>
+      <!-- Edges -->
+      <g id="edges"></g>
+      <!-- Nodes -->
+      <g id="nodes"></g>
+    </svg>
+  </div>
+</div>
+
+<!-- Live event stream -->
+<div class="panel">
+  <div class="section-title">
+    <span class="section-title__icon">⚡</span>
+    <span class="section-title__text">Live Event Stream</span>
+    <div class="section-title__line"></div>
+    <span class="loader" id="stream-loader"></span>
+  </div>
+  <div id="event-feed" style="display:grid;gap:6px"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Pipeline nodes / edges ──────────────────────────────────────────────────
+const NODES = [
+  {id:"sources",   x:30,  y:50, label:"Data Sources",    sublabel:"Schools · HR · Finance\nInventory · Trainers", color:"#a78bfa", icon:"🏭"},
+  {id:"producers", x:200, y:50, label:"Kafka Producers",  sublabel:"Microservices\n(Dockerized)",                  color:"#2563eb", icon:"📤"},
+  {id:"kafka",     x:380, y:50, label:"Apache Kafka",     sublabel:"8 Topics · 3 Brokers\nZookeeper cluster",      color:"#38bdf8", icon:"🌊"},
+  {id:"consumers", x:560, y:50, label:"Kafka Consumers",  sublabel:"Dashboard · Report\nAlert · Email Svc",        color:"#2563eb", icon:"📥"},
+  {id:"postgres",  x:740, y:20, label:"PostgreSQL",       sublabel:"Persistent store\nDocker volume",              color:"#22d3a5", icon:"🗄️"},
+  {id:"redis",     x:740, y:80, label:"Redis Cache",      sublabel:"Real-time state\nSession data",                color:"#fbbf24", icon:"⚡"},
+  {id:"dashboard", x:920, y:20, label:"Dashboard",        sublabel:"Co-founder view\nLive metrics",               color:"#38bdf8", icon:"📊"},
+  {id:"ceoreport", x:920, y:80, label:"CEO Report",       sublabel:"Weekly digest\n→ Germany",                    color:"#a78bfa", icon:"🇩🇪"},
+];
+const EDGES = [
+  ["sources","producers"],["producers","kafka"],["kafka","consumers"],
+  ["consumers","postgres"],["consumers","redis"],["postgres","dashboard"],
+  ["redis","dashboard"],["postgres","ceoreport"],
+];
+const pos = Object.fromEntries(NODES.map(n => [n.id, {x:n.x, y:n.y}]));
+
+// Draw edges
+const eG = document.getElementById('edges');
+EDGES.forEach(([f,t]) => {
+  const fx = pos[f].x+70, fy = pos[f].y+26, tx = pos[t].x, ty = pos[t].y+26;
+  eG.innerHTML += `
+    <line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" stroke="rgba(56,189,248,.18)" stroke-width="1.5"/>
+    <line x1="${fx}" y1="${fy}" x2="${tx}" y2="${ty}" stroke="rgba(56,189,248,.6)" stroke-width="1"
+          stroke-dasharray="6 4" style="animation:flow 1.5s linear infinite" marker-end="url(#arr)"/>`;
+});
+
+// Draw nodes
+const nG = document.getElementById('nodes');
+NODES.forEach(n => {
+  const lines = n.sublabel.split('\n');
+  nG.innerHTML += `
+    <g transform="translate(${n.x},${n.y - 26})">
+      <rect x="0" y="0" width="130" height="60" rx="8" fill="${n.color}22" stroke="${n.color}88" stroke-width="1.5"/>
+      <text x="12" y="20" font-size="16">${n.icon}</text>
+      <text x="34" y="19" fill="${n.color}" font-family="'JetBrains Mono',monospace" font-size="10" font-weight="700">${n.label}</text>
+      ${lines.map((l,i) => `<text x="12" y="${36+i*13}" fill="#64748b" font-family="'JetBrains Mono',monospace" font-size="9">${l}</text>`).join('')}
+    </g>`;
+});
+
+// ── SSE event stream ────────────────────────────────────────────────────────
+const TYPE_COLOR = {error:'var(--red)',warn:'var(--yellow)',success:'var(--green)',info:'var(--cyan)'};
+const feed = document.getElementById('event-feed');
+const loader = document.getElementById('stream-loader');
+let events = [];
+
+function renderFeed() {
+  feed.innerHTML = events.slice(0,8).map((e,i) => `
+    <div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
+                padding:8px 12px;border-radius:8px;
+                background:${i===0?'rgba(56,189,248,.04)':'rgba(255,255,255,.02)'};
+                border:1px solid ${i===0?'rgba(56,189,248,.2)':'rgba(255,255,255,.05)'};
+                ${i===0?'animation:fadeIn .4s ease':''}">
+      <span class="dot dot--pulse" style="background:${TYPE_COLOR[e.type]||'var(--cyan)'};box-shadow:0 0 6px ${TYPE_COLOR[e.type]||'var(--cyan)'}"></span>
+      <div>
+        ${tag(e.topic)} <span style="margin-left:8px;font-size:12px;color:var(--text)">${e.msg}</span>
+      </div>
+      ${tag(e.source,'tag--purple')}
+    </div>`).join('');
+}
+
+function pushEvent(e) {
+  events = [e, ...events].slice(0, 40);
+  renderFeed();
+}
+
+if (USE_POLLING) {
+  loader.style.display = 'none';
+  api('/api/events/recent').then(d => { if (d?.events?.length) { events = d.events; renderFeed(); } });
+  window.addEventListener('roboclub:tick', ev => {
+    if (ev.detail?.event) pushEvent(ev.detail.event);
+  });
+} else {
+  const es = new EventSource(API + '/api/events/stream');
+  es.onopen  = () => { loader.style.display = 'none'; };
+  es.onmessage = ev => pushEvent(JSON.parse(ev.data));
+  es.onerror = () => { loader.style.display = 'inline-block'; };
+}
+</script>
+{% endblock %}

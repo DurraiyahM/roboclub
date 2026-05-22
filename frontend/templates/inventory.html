@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %} · Inventory{% endblock %}
+
+{% block content %}
+<div class="row-between mb20">
+  <div>
+    <div class="page-eyebrow">LIVE INVENTORY</div>
+    <h2 class="page-title">Stock &amp; Reorder Levels</h2>
+    <p class="page-sub">Real data — saved to database · low stock creates alerts automatically</p>
+  </div>
+  <button class="btn btn--cyan" onclick="showAddForm()">+ Add item</button>
+</div>
+
+<div class="g4 mb20" id="inv-summary">
+  <div class="stat-card" style="border-left:3px solid var(--green)">
+    <div class="stat-card__label">OK</div>
+    <div class="stat-card__val" style="color:var(--green)" id="sum-ok">—</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--yellow)">
+    <div class="stat-card__label">Low stock</div>
+    <div class="stat-card__val" style="color:var(--yellow)" id="sum-low">—</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--red)">
+    <div class="stat-card__label">Critical</div>
+    <div class="stat-card__val" style="color:var(--red)" id="sum-critical">—</div>
+  </div>
+  <div class="stat-card" style="border-left:3px solid var(--cyan)">
+    <div class="stat-card__label">Open alerts</div>
+    <div class="stat-card__val" style="color:var(--cyan)" id="sum-alerts">—</div>
+  </div>
+</div>
+
+<div id="add-panel" class="panel mb16" style="display:none;border-color:rgba(56,189,248,.3)">
+  <div class="section-title">
+    <span class="section-title__text">New inventory item</span>
+    <div class="section-title__line"></div>
+  </div>
+  <div class="g2 gap12" style="align-items:end">
+    <div><label style="font-size:11px;color:var(--muted)">SKU</label>
+      <input id="new-sku" class="inv-input" placeholder="SRV-002" /></div>
+    <div><label style="font-size:11px;color:var(--muted)">Name</label>
+      <input id="new-name" class="inv-input" placeholder="Servo Motor Pack" /></div>
+    <div><label style="font-size:11px;color:var(--muted)">Quantity</label>
+      <input id="new-qty" type="number" class="inv-input" value="0" min="0" /></div>
+    <div><label style="font-size:11px;color:var(--muted)">Reorder at</label>
+      <input id="new-thresh" type="number" class="inv-input" value="10" min="1" /></div>
+    <div><label style="font-size:11px;color:var(--muted)">Unit</label>
+      <input id="new-unit" class="inv-input" value="pcs" /></div>
+    <div class="row-center gap8">
+      <button class="btn btn--green" onclick="createItem()">Save</button>
+      <button class="btn" onclick="hideAddForm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="section-title">
+    <span class="section-title__icon">📦</span>
+    <span class="section-title__text">Warehouse stock</span>
+    <div class="section-title__line"></div>
+  </div>
+  <div id="inv-list" style="display:grid;gap:10px">
+    <div style="text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
+  </div>
+</div>
+
+<style>
+  .inv-input {
+    width:100%; margin-top:4px; padding:8px 10px;
+    background:rgba(0,0,0,.3); border:1px solid var(--border); border-radius:6px;
+    color:var(--text); font-family:var(--mono); font-size:12px;
+  }
+  .inv-input:focus { outline:none; border-color:var(--cyan); }
+  .inv-row { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:center;
+             padding:14px 16px; background:rgba(255,255,255,.02);
+             border:1px solid var(--border); border-radius:10px; }
+  .inv-row--critical { border-color:rgba(248,113,113,.4); border-left:3px solid var(--red); }
+  .inv-row--low { border-color:rgba(251,191,36,.35); border-left:3px solid var(--yellow); }
+  .inv-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STATUS_TAG = {
+  ok:       tag('OK', 'tag--green'),
+  low:      tag('LOW', 'tag--yellow'),
+  critical: tag('CRITICAL', 'tag--red'),
+};
+
+function showAddForm() { document.getElementById('add-panel').style.display = 'block'; }
+function hideAddForm() { document.getElementById('add-panel').style.display = 'none'; }
+
+async function loadInventory() {
+  const data = await api('/api/inventory');
+  if (!data) return;
+
+  const s = data.summary;
+  document.getElementById('sum-ok').textContent = s.ok;
+  document.getElementById('sum-low').textContent = s.low;
+  document.getElementById('sum-critical').textContent = s.critical;
+  document.getElementById('sum-alerts').textContent = data.alerts;
+
+  document.getElementById('inv-list').innerHTML = data.items.map(item => {
+    const rowCls = item.status === 'ok' ? 'inv-row' : `inv-row inv-row--${item.status}`;
+    return `
+    <div class="${rowCls}" id="row-${item.id}">
+      <div>
+        <div class="row-center gap8" style="margin-bottom:6px">
+          ${tag(item.sku, 'tag--purple')}
+          ${STATUS_TAG[item.status] || ''}
+          <span style="font-weight:700;font-size:14px">${item.name}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">
+          Qty: <strong style="color:var(--text);font-family:var(--mono)">${item.quantity}</strong>
+          ${item.unit} · Reorder at <strong style="font-family:var(--mono)">${item.threshold}</strong>
+          · Updated ${new Date(item.updated_at).toLocaleString()}
+        </div>
+      </div>
+      <div class="inv-actions">
+        <button class="btn" onclick="adjust(${item.id}, -1)" title="Used one">−1</button>
+        <button class="btn" onclick="adjust(${item.id}, 1)">+1</button>
+        <button class="btn btn--green" onclick="adjust(${item.id}, 10)">+10 restock</button>
+        <input type="number" class="inv-input" style="width:70px" id="qty-${item.id}" value="${item.quantity}" min="0" />
+        <button class="btn btn--cyan" onclick="setQty(${item.id})">Set qty</button>
+        <input type="number" class="inv-input" style="width:70px" id="th-${item.id}" value="${item.threshold}" min="1" />
+        <button class="btn" onclick="setThresh(${item.id})">Set threshold</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  refreshBadge();
+}
+
+async function adjust(id, delta) {
+  await apiPost(`/api/inventory/${id}/adjust`, { delta });
+  loadInventory();
+}
+
+async function setQty(id) {
+  const qty = parseInt(document.getElementById(`qty-${id}`).value, 10);
+  if (isNaN(qty) || qty < 0) return;
+  await apiPut(`/api/inventory/${id}`, { quantity: qty });
+  loadInventory();
+}
+
+async function setThresh(id) {
+  const threshold = parseInt(document.getElementById(`th-${id}`).value, 10);
+  if (isNaN(threshold) || threshold < 1) return;
+  await apiPut(`/api/inventory/${id}`, { threshold });
+  loadInventory();
+}
+
+async function createItem() {
+  const body = {
+    sku: document.getElementById('new-sku').value,
+    name: document.getElementById('new-name').value,
+    quantity: parseInt(document.getElementById('new-qty').value, 10) || 0,
+    threshold: parseInt(document.getElementById('new-thresh').value, 10) || 10,
+    unit: document.getElementById('new-unit').value || 'pcs',
+  };
+  if (!body.sku || !body.name) { alert('SKU and name required'); return; }
+  const r = await apiPost('/api/inventory', body);
+  if (r) { hideAddForm(); loadInventory(); }
+}
+
+loadInventory();
+setInterval(loadInventory, 5000);
+</script>
+{% endblock %}
