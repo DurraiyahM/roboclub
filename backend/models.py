@@ -20,3 +20,25 @@ class InventoryUpdate(BaseModel):
 
 class InventoryAdjust(BaseModel):
     delta: int = Field(..., description="Add (+) or subtract (-) from current quantity")
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AttendanceSessionCreate(BaseModel):
+    school_id: int
+    present: int
+    total: int
+    batch_name: str = "Main"
+    notes: str = ""
+    trainer_id: Optional[int] = None
+
+
+class AlertRuleToggle(BaseModel):
+    enabled: bool
+
+
+class SnoozeRequest(BaseModel):
+    hours: int = 24

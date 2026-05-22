@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %} · School{% endblock %}
+{% block content %}
+<div id="school-root"><div style="text-align:center;padding:40px"><span class="loader"></span></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const id = new URLSearchParams(location.search).get('id');
+async function load() {
+  if (!id) { document.getElementById('school-root').innerHTML = '<p>Select a school from search or dashboard.</p>'; return; }
+  const s = await api('/api/v1/schools/' + id);
+  if (!s) return;
+  const hist = (s.attendance_history || []).map(h =>
+    `<div class="row-between" style="font-size:11px;padding:4px 0"><span>${h.date}</span><span style="font-family:var(--mono);color:var(--cyan)">${h.att}%</span></div>`
+  ).join('') || '<p style="color:var(--muted);font-size:12px">No history yet</p>';
+  const pays = (s.payments || []).map(p =>
+    `<div class="row-between" style="font-size:11px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span>${p.amount_display}</span><span class="tag tag--${p.status==='overdue'?'red':p.status==='paid'?'green':'yellow'}">${p.status}</span></div>`
+  ).join('');
+  document.getElementById('school-root').innerHTML = `
+  <div class="page-header">
+    <div class="page-eyebrow">SCHOOL DETAIL</div>
+    <h2 class="page-title">${s.name} <span class="page-badge page-badge--live">Live</span></h2>
+    <p class="page-sub">${s.city} · MOU ${s.mou}</p>
+  </div>
+  <div class="g3 mb20">
+    <div class="stat-card"><div class="stat-card__label">Attendance</div><div class="stat-card__val" style="color:var(--cyan)">${s.att}%</div></div>
+    <div class="stat-card"><div class="stat-card__label">Present</div><div class="stat-card__val">${s.present}/${s.total}</div></div>
+    <div class="stat-card"><div class="stat-card__label">Next session</div><div class="stat-card__val" style="font-size:14px">${s.next}</div></div>
+  </div>
+  <div class="g2">
+    <div class="panel"><div class="section-title"><span class="section-title__text">14-day attendance</span></div>${hist}</div>
+    <div class="panel"><div class="section-title"><span class="section-title__text">Payments</span></div>${pays}</div>
+  </div>`;
+}
+load();
+</script>
+{% endblock %}

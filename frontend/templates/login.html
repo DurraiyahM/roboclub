@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %} · Login{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-eyebrow">AUTH</div>
+  <h2 class="page-title">Sign in <span id="page-source-badge" class="page-badge page-badge--live">Live</span></h2>
+  <p class="page-sub">Demo accounts below · token stored in browser</p>
+</div>
+<div class="panel" style="max-width:400px">
+  <label style="font-size:11px;color:var(--muted)">Email</label>
+  <input id="email" class="search-input" style="margin:6px 0 12px" value="ops@roboclub.pk" />
+  <label style="font-size:11px;color:var(--muted)">Password</label>
+  <input id="password" type="password" class="search-input" style="margin:6px 0 16px" value="ops123" />
+  <button class="btn btn--green" onclick="doLogin()">Login</button>
+  <p id="login-err" style="color:var(--red);font-size:12px;margin-top:12px;display:none"></p>
+  <div style="margin-top:20px;font-size:11px;color:var(--dim);line-height:1.8">
+    <strong>Ops:</strong> ops@roboclub.pk / ops123<br>
+    <strong>Trainer:</strong> trainer@roboclub.pk / trainer123<br>
+    <strong>CEO:</strong> ceo@roboclub.de / ceo123
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function doLogin() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  try {
+    const r = await fetch(API + '/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) throw new Error('Login failed');
+    const d = await r.json();
+    localStorage.setItem('roboclub_token', d.token);
+    localStorage.setItem('roboclub_user', JSON.stringify(d.user));
+    location.href = d.user.role === 'trainer' ? '/checkin' : '/dashboard';
+  } catch (e) {
+    const el = document.getElementById('login-err');
+    el.style.display = 'block';
+    el.textContent = 'Invalid email or password';
+  }
+}
+</script>
+{% endblock %}

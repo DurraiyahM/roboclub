@@ -11,7 +11,11 @@ app = Flask(__name__)
 # The FastAPI backend URL — override via env in Docker
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
-VALID_PAGES = ["pipeline", "kafka", "docker", "ingestion", "dashboard", "attendance", "inventory", "trainers", "ceo", "notifications"]
+VALID_PAGES = [
+    "pipeline", "kafka", "docker", "ingestion", "dashboard", "attendance",
+    "checkin", "school", "payments", "inventory", "trainers", "ceo",
+    "notifications", "login",
+]
 
 NAV = [
     {"id": "pipeline",      "label": "Pipeline",    "icon": "⚡"},
@@ -20,6 +24,8 @@ NAV = [
     {"id": "ingestion",     "label": "Ingestion",   "icon": "🔄"},
     {"id": "dashboard",     "label": "Dashboard",   "icon": "📊"},
     {"id": "attendance",    "label": "Attendance",  "icon": "🏫"},
+    {"id": "checkin",       "label": "Check-in",    "icon": "✓"},
+    {"id": "payments",      "label": "Payments",    "icon": "💰"},
     {"id": "inventory",     "label": "Inventory",   "icon": "📦"},
     {"id": "trainers",      "label": "Trainers",    "icon": "👨‍🏫"},
     {"id": "ceo",           "label": "CEO Report",  "icon": "🇩🇪"},

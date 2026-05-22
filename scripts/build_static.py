@@ -34,10 +34,14 @@ PAGES = [
     ("ingestion", "ingestion.html"),
     ("dashboard", "dashboard.html"),
     ("attendance", "attendance.html"),
+    ("checkin", "checkin.html"),
+    ("school", "school.html"),
+    ("payments", "payments.html"),
     ("inventory", "inventory.html"),
     ("trainers", "trainers.html"),
     ("ceo", "ceo.html"),
     ("notifications", "notifications.html"),
+    ("login", "login.html"),
 ]
 
 
@@ -72,6 +76,12 @@ def main() -> None:
 
     # Default entry
     shutil.copy(PUBLIC / "pipeline.html", PUBLIC / "index.html")
+    static_src = ROOT / "frontend" / "static"
+    if static_src.exists():
+        js_dir = PUBLIC / "js"
+        js_dir.mkdir(exist_ok=True)
+        for f in static_src.glob("*.js"):
+            shutil.copy(f, js_dir / f.name)
     print(f"Done — {len(list(PUBLIC.glob('*.html')))} files in public/")
 
 

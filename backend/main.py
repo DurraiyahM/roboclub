@@ -14,7 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 import database as db
+import store
 from models import InventoryAdjust, InventoryCreate, InventoryUpdate
+from routers.v1 import router as v1_router
 
 
 @asynccontextmanager
@@ -24,7 +26,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="RoboClub Pipeline API - Pakistan", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="RoboClub Pipeline API - Pakistan", version="3.0.0", lifespan=lifespan)
+app.include_router(v1_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -142,9 +145,17 @@ IS_SERVERLESS = bool(os.getenv("VERCEL") or os.getenv("VERCEL_ENV") or os.getenv
 
 def _init_schools_state() -> None:
     global _schools_state
+    try:
+        schools = store.list_schools()
+        if schools:
+            _schools_state = schools
+            return
+    except Exception:
+        pass
     _schools_state = [copy.deepcopy(s) for s in SCHOOLS_SEED]
     for s in _schools_state:
         s["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        s.setdefault("data_source", "demo")
 
 
 def _attendance_status(pct: int) -> str:
@@ -165,16 +176,33 @@ def _school_by_name(name: str) -> Optional[Dict[str, Any]]:
 
 
 def _apply_attendance_update(scenario: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    db_school = store.get_school_by_name(scenario["school"])
+    if db_school and db_school["total"] > 0:
+        new_present = max(
+            0, min(db_school["total"], db_school["present"] + scenario["delta_present"])
+        )
+        updated = store.update_school_present(db_school["id"], new_present)
+        if updated:
+            global _schools_state
+            _schools_state = store.list_schools()
+            return {
+                "school": updated["name"],
+                "city": updated["city"],
+                "present": updated["present"],
+                "total": updated["total"],
+                "att": updated["att"],
+                "status": updated["status"],
+                "trainer": scenario["trainer"],
+                "updated_at": updated["updated_at"],
+            }
     school = _school_by_name(scenario["school"])
-    if not school or school["total"] <= 0:
+    if not school or school.get("total", 0) <= 0:
         return None
-
     school["present"] = max(0, min(school["total"], school["present"] + scenario["delta_present"]))
     school["att"] = round(100 * school["present"] / school["total"])
     school["status"] = _attendance_status(school["att"])
     school["updated_at"] = datetime.utcnow().isoformat() + "Z"
     school["trainer"] = scenario["trainer"]
-
     return {
         "school": school["name"],
         "city": school["city"],
@@ -236,6 +264,8 @@ def _run_live_tick() -> Dict[str, Any]:
                 "attendance": update,
             })
             result["event"] = event
+            global _schools_state
+            _schools_state = store.list_schools()
             result["attendance"] = {
                 "event": "attendance",
                 "schools": copy.deepcopy(_schools_state),
@@ -414,8 +444,11 @@ def docker_services():
 # ─── Notifications ────────────────────────────────────────────────────────────
 
 @app.get("/api/notifications", tags=["Notifications"])
-def get_notifications():
-    return db.list_notifications()
+def get_notifications(
+    category: Optional[str] = None,
+    include_resolved: bool = False,
+):
+    return db.list_notifications(category, include_resolved)
 
 
 @app.put("/api/notifications/{notif_id}/read", tags=["Notifications"])
@@ -436,56 +469,102 @@ def unread_count():
     return {"count": db.unread_notification_count()}
 
 
+@app.put("/api/notifications/{notif_id}/resolve", tags=["Notifications"])
+def resolve_notification(notif_id: int):
+    if store.resolve_notification(notif_id):
+        return {"ok": True}
+    raise HTTPException(status_code=404, detail="Notification not found")
+
+
+@app.put("/api/notifications/{notif_id}/snooze", tags=["Notifications"])
+def snooze_notification(notif_id: int, hours: int = 24):
+    if store.snooze_notification(notif_id, hours):
+        return {"ok": True}
+    raise HTTPException(status_code=404, detail="Notification not found")
+
+
+@app.get("/api/notifications/critical", tags=["Notifications"])
+def critical_notifications():
+    return store.critical_notifications()
+
+
+@app.get("/api/search", tags=["Search"])
+def search(q: str):
+    return store.global_search(q)
+
+
+@app.get("/api/meta/pages", tags=["Meta"])
+def meta_pages():
+    return store.page_meta()
+
+
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 
 @app.get("/api/dashboard/kpis", tags=["Dashboard"])
 def dashboard_kpis():
     _tick["val"] += 1
     t = _tick["val"]
-    active_trainers = sum(1 for tr in TRAINERS if tr["status"] == "active")
+    trainers = store.list_trainers()
+    active_trainers = sum(1 for tr in trainers if tr["status"] == "active")
+    pay = store.payments_summary()
+    schools = store.list_schools()
+    students = sum(s["total"] for s in schools)
     return {
-        "active_schools":    6,
-        "students_live":     239 + t,
-        "trainers_online":   f"{active_trainers}/20",
-        "revenue_apr":       f"₨{(9100000 + t * 5000) // 100000}L",  # Converted to Pakistani Rupees (Lac)
+        "active_schools":    len(schools),
+        "students_live":     students + t,
+        "trainers_online":   f"{active_trainers}/{len(trainers)}",
+        "revenue_apr":       f"₨{(9100000 + t * 5000) // 100000}L",
         "inventory_alerts":  db.count_inventory_alerts(),
-        "pending_mous":      2,
-        "outstanding_pkr":   "63L",  # Changed from INR to PKR
+        "pending_mous":      sum(1 for s in schools if s.get("mou_status") in ("pending", "renewal")),
+        "outstanding_pkr":   pay["outstanding_display"],
         "new_leads":         73,
+        "attendance_avg":    store.avg_attendance_today(),
+        "overdue_count":     pay["overdue_count"],
+    }
+
+
+@app.get("/api/dashboard/ops", tags=["Dashboard"])
+def dashboard_ops():
+    pay = store.payments_summary()
+    return {
+        "attendance_avg": store.avg_attendance_today(),
+        "overdue_total_display": f"₨{pay['overdue_total_pkr']:,}",
+        "overdue_count": pay["overdue_count"],
+        "inventory_alerts": db.count_inventory_alerts(),
     }
 
 
 @app.get("/api/dashboard/schools", tags=["Dashboard"])
 def dashboard_schools():
-    return _schools_state
+    return store.list_schools()
 
 
 # ─── Trainers ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/trainers", tags=["Trainers"])
 def get_all_trainers():
-    """Return all 20 trainers with their details."""
-    return TRAINERS
+    return store.list_trainers()
 
 
 @app.get("/api/trainers/stats", tags=["Trainers"])
 def get_trainers_stats():
     """Get trainer statistics."""
-    active_trainers = sum(1 for t in TRAINERS if t["status"] == "active")
-    inactive_trainers = sum(1 for t in TRAINERS if t["status"] == "inactive")
-    avg_rating = sum(t["rating"] for t in TRAINERS) / len(TRAINERS)
-    total_sessions = sum(t["sessions"] for t in TRAINERS)
+    trainers = store.list_trainers()
+    active_trainers = sum(1 for t in trainers if t["status"] == "active")
+    inactive_trainers = sum(1 for t in trainers if t["status"] == "inactive")
+    avg_rating = sum(t["rating"] for t in trainers) / len(trainers) if trainers else 0
+    total_sessions = sum(t["sessions"] for t in trainers)
 
     return {
-        "total_trainers": len(TRAINERS),
+        "total_trainers": len(trainers),
         "active_trainers": active_trainers,
         "inactive_trainers": inactive_trainers,
         "average_rating": round(avg_rating, 2),
         "total_sessions_conducted": total_sessions,
         "trainers_by_city": {
-            "Karachi": sum(1 for t in TRAINERS if t["city"] == "Karachi"),
-            "Lahore": sum(1 for t in TRAINERS if t["city"] == "Lahore"),
-            "Islamabad": sum(1 for t in TRAINERS if t["city"] == "Islamabad"),
+            "Karachi": sum(1 for t in trainers if t["city"] == "Karachi"),
+            "Lahore": sum(1 for t in trainers if t["city"] == "Lahore"),
+            "Islamabad": sum(1 for t in trainers if t["city"] == "Islamabad"),
         },
     }
 

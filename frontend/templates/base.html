@@ -179,9 +179,38 @@
     /* ── Flex row utility ── */
     .row-between { display:flex; justify-content:space-between; align-items:center; }
     .row-center  { display:flex; align-items:center; gap:8px; }
+    .top-toolbar { display:flex; gap:10px; align-items:center; padding:10px 32px 0; flex-wrap:wrap; position:relative; z-index:5; }
+    .search-wrap { flex:1; min-width:180px; max-width:420px; position:relative; }
+    .search-input { width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border);
+      background:rgba(0,0,0,.35); color:var(--text); font-size:12px; font-family:var(--mono); }
+    .search-results { display:none; position:absolute; top:100%; left:0; right:0; margin-top:4px;
+      background:#060f1e; border:1px solid var(--border); border-radius:8px; max-height:240px; overflow-y:auto; z-index:50; }
+    .search-hit { display:block; padding:10px 12px; font-size:12px; color:var(--text); text-decoration:none; border-bottom:1px solid var(--border); }
+    .search-hit:hover { background:rgba(56,189,248,.08); }
+    .critical-banner { display:none; padding:10px 32px; background:rgba(248,113,113,.12); border-bottom:1px solid rgba(248,113,113,.3);
+      font-size:12px; gap:16px; flex-wrap:wrap; }
+    .critical-banner__item { margin-right:16px; }
+    .page-badge { font-size:10px; font-family:var(--mono); padding:2px 8px; border-radius:4px; margin-left:8px; vertical-align:middle; }
+    .page-badge--live { background:rgba(34,211,165,.15); color:var(--green); border:1px solid rgba(34,211,165,.35); }
+    .page-badge--demo { background:rgba(100,116,139,.15); color:var(--muted); border:1px solid var(--border); }
+    .page-badge--mixed { background:rgba(56,189,248,.12); color:var(--cyan); border:1px solid rgba(56,189,248,.3); }
+    .mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; z-index:30;
+      background:rgba(0,0,0,.92); border-top:1px solid var(--border); padding:8px 4px; justify-content:space-around; }
+    .mobile-nav a { color:var(--muted); text-decoration:none; font-size:10px; text-align:center; padding:4px 8px; }
+    .mobile-nav a.active { color:var(--cyan); }
+    .api-error { display:none; padding:10px 14px; margin-bottom:12px; background:rgba(248,113,113,.15);
+      border:1px solid var(--red); border-radius:8px; font-size:12px; color:var(--red); }
+    @media (max-width:768px) {
+      .sidebar { display:none; }
+      .main-content { padding:16px 16px 72px; }
+      .top-toolbar { padding:10px 16px 0; }
+      .mobile-nav { display:flex; }
+      body { overflow:auto; }
+      .app-shell { flex-direction:column; height:auto; min-height:100vh; }
+    }
   </style>
 </head>
-<body>
+<body data-page="{{ current_page }}">
 <div class="bg-radial"></div>
 <div class="top-line"></div>
 
@@ -216,24 +245,53 @@
     </div>
   </nav>
 
-  <!-- Main -->
-  <main class="main-content">
-    {% block content %}{% endblock %}
-  </main>
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div class="top-toolbar">
+      <div class="search-wrap">
+        <input id="global-search" class="search-input" type="search" data-i18n-placeholder="search" placeholder="Search schools, trainers, stock…" />
+        <div id="search-results" class="search-results"></div>
+      </div>
+      <button class="btn" data-set-lang="en" type="button">EN</button>
+      <button class="btn" data-set-lang="ur" type="button">اردو</button>
+      <a href="/login" class="btn btn--cyan" data-i18n="login">Login</a>
+    </div>
+    <div id="critical-banner" class="critical-banner row-center"></div>
+    <main class="main-content">
+      <div id="api-error" class="api-error"></div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </div>
+<nav class="mobile-nav">
+  <a href="/dashboard">📊</a>
+  <a href="/attendance">🏫</a>
+  <a href="/checkin">✓</a>
+  <a href="/notifications">🔔</a>
+  <a href="/inventory">📦</a>
+</nav>
 
 <script>
   const API = "{{ api_url }}";
   const USE_POLLING = {{ use_polling|default(false)|tojson }};
 
   // ── Fetch helpers ──────────────────────────────────────────────────────────
+  function showApiError(msg) {
+    const el = document.getElementById('api-error');
+    if (el) { el.style.display = 'block'; el.textContent = msg; }
+  }
   async function api(path) {
     try {
-      const r = await fetch(API + path);
-      if (!r.ok) throw new Error(r.status);
+      const headers = {};
+      const t = localStorage.getItem('roboclub_token');
+      if (t) headers['Authorization'] = 'Bearer ' + t;
+      const r = await fetch(API + path, { headers });
+      if (!r.ok) throw new Error('API ' + r.status + ': ' + path);
+      const el = document.getElementById('api-error');
+      if (el) el.style.display = 'none';
       return r.json();
     } catch(e) {
       console.error('API error', path, e);
+      showApiError('Could not load data. Check connection or try again.');
       return null;
     }
   }
@@ -319,6 +377,7 @@
     return `<div class="cpu-track"><div class="cpu-bar ${cls}" style="width:${pct}%"></div></div>`;
   }
 </script>
+<script src="/js/core.js"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

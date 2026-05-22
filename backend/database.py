@@ -121,6 +121,12 @@ def init_db() -> None:
                     (item["type"], item["title"], item["body"], "Earlier", item["read"], _now_iso()),
                 )
 
+    try:
+        import store
+        store.init_store()
+    except Exception:
+        pass
+
     sync_inventory_alerts()
 
 
@@ -224,8 +230,8 @@ def sync_inventory_alerts() -> int:
                 else:
                     conn.execute(
                         """INSERT INTO notifications
-                           (type, title, body, time_label, read, ref_key, created_at)
-                           VALUES (?, ?, ?, 'Just now', 0, ?, ?)""",
+                           (type, title, body, time_label, read, ref_key, created_at, category, resolved)
+                           VALUES (?, ?, ?, 'Just now', 0, ?, ?, 'inventory', 0)""",
                         (ntype, title, body, ref, _now_iso()),
                     )
                     created += 1
@@ -237,22 +243,20 @@ def sync_inventory_alerts() -> int:
     return created
 
 
-def list_notifications() -> List[Dict[str, Any]]:
+def list_notifications(
+    category: Optional[str] = None,
+    include_resolved: bool = False,
+) -> List[Dict[str, Any]]:
+    try:
+        import store
+        return store.list_notifications_filtered(category, include_resolved)
+    except Exception:
+        pass
     with get_db() as conn:
         rows = conn.execute(
             "SELECT * FROM notifications ORDER BY read ASC, id DESC"
         ).fetchall()
-    return [
-        {
-            "id": r["id"],
-            "type": r["type"],
-            "title": r["title"],
-            "body": r["body"],
-            "time": r["time_label"],
-            "read": bool(r["read"]),
-        }
-        for r in rows
-    ]
+    return [_row_to_notification(r) for r in rows]
 
 
 def mark_notification_read(notif_id: int) -> bool:
@@ -272,11 +276,15 @@ def mark_all_notifications_read() -> int:
 def unread_notification_count() -> int:
     with get_db() as conn:
         return conn.execute(
-            "SELECT COUNT(*) FROM notifications WHERE read = 0"
+            """SELECT COUNT(*) FROM notifications
+               WHERE read = 0 AND resolved = 0
+               AND (snoozed_until IS NULL OR snoozed_until < ?)""",
+            (_now_iso(),),
         ).fetchone()[0]
 
 
 def _row_to_notification(row: sqlite3.Row) -> Dict[str, Any]:
+    keys = row.keys()
     return {
         "id": row["id"],
         "type": row["type"],
@@ -284,6 +292,9 @@ def _row_to_notification(row: sqlite3.Row) -> Dict[str, Any]:
         "body": row["body"],
         "time": row["time_label"],
         "read": bool(row["read"]),
+        "category": row["category"] if "category" in keys else "general",
+        "resolved": bool(row["resolved"]) if "resolved" in keys else False,
+        "snoozed_until": row["snoozed_until"] if "snoozed_until" in keys else None,
     }
 
 
@@ -294,6 +305,7 @@ def create_notification(
     body: str,
     ref_key: Optional[str] = None,
     time_label: str = "Just now",
+    category: str = "general",
 ) -> Dict[str, Any]:
     """Insert or refresh a notification; returns the row as API dict."""
     with get_db() as conn:
@@ -304,8 +316,8 @@ def create_notification(
             if existing:
                 conn.execute(
                     """UPDATE notifications SET type = ?, title = ?, body = ?,
-                       time_label = ?, read = 0 WHERE ref_key = ?""",
-                    (ntype, title, body, time_label, ref_key),
+                       time_label = ?, read = 0, category = ? WHERE ref_key = ?""",
+                    (ntype, title, body, time_label, category, ref_key),
                 )
                 row = conn.execute(
                     "SELECT * FROM notifications WHERE ref_key = ?", (ref_key,)
@@ -314,9 +326,9 @@ def create_notification(
 
         cur = conn.execute(
             """INSERT INTO notifications
-               (type, title, body, time_label, read, ref_key, created_at)
-               VALUES (?, ?, ?, ?, 0, ?, ?)""",
-            (ntype, title, body, time_label, ref_key, _now_iso()),
+               (type, title, body, time_label, read, ref_key, created_at, category, resolved)
+               VALUES (?, ?, ?, ?, 0, ?, ?, ?, 0)""",
+            (ntype, title, body, time_label, ref_key, _now_iso(), category),
         )
         row = conn.execute(
             "SELECT * FROM notifications WHERE id = ?", (cur.lastrowid,)
