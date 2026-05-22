@@ -16,7 +16,7 @@ Vercel hosts **both** the UI (static HTML) and the API (FastAPI serverless) in o
    - **Framework Preset:** Other
    - **Build Command:** `python scripts/build_static.py` (or use `vercel.json` defaults)
    - **Output Directory:** `public`
-   - **Install Command:** `pip install -r requirements.txt`
+   - **Install Command:** `python3 -m pip install --break-system-packages -r requirements.txt`
 4. Click **Deploy**
 
 Your app will be at: `https://your-project.vercel.app`
