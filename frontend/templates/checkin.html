@@ -1,39 +1,71 @@
 {% extends "base.html" %}
 {% block title %} · Check-in{% endblock %}
 {% block content %}
-<div class="page-header"><h2 class="page-title">Check-in <span class="page-badge page-badge--live">Live</span></h2></div>
-<div class="panel" style="max-width:480px">
-  <select id="school-id" class="search-input" style="width:100%;margin-bottom:10px"></select>
-  <input id="present" type="number" class="search-input" style="width:100%;margin-bottom:10px" value="30" />
-  <input id="total" type="number" class="search-input" style="width:100%;margin-bottom:10px" value="40" />
-  <button class="btn btn--green" style="width:100%;padding:14px" onclick="submit()">Submit</button>
-  <p id="msg" style="margin-top:12px;color:var(--green);font-size:12px"></p>
+<div class="checkin-hero">
+  <div class="page-header" style="text-align:center">
+    <div class="page-eyebrow">FIELD CHECK-IN</div>
+    <h2 class="page-title">Trainer Check-in <span class="page-badge page-badge--live">Live</span></h2>
+    <p class="page-sub">Tap counts · saves to live attendance</p>
+  </div>
+  <div class="panel panel--glass">
+    <div class="checkin-field">
+      <label>SCHOOL</label>
+      <select id="school-id" class="search-input"></select>
+    </div>
+    <div class="checkin-field">
+      <label>PRESENT</label>
+      <input id="present" type="number" class="search-input" value="30" inputmode="numeric" />
+    </div>
+    <div class="checkin-field">
+      <label>TOTAL ENROLLED</label>
+      <input id="total" type="number" class="search-input" value="40" inputmode="numeric" />
+    </div>
+    <button class="btn btn--green" style="width:100%" onclick="submit()">Submit check-in</button>
+    <p id="msg" style="margin-top:14px;text-align:center;font-size:13px;color:var(--green)"></p>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
 api('/api/v1/bundle/checkin').then(d => {
   if (!d) return;
-  document.getElementById('school-id').innerHTML = d.schools.filter(s=>s.total>0).map(s=>
-    `<option value="${s.id}">${s.name}</option>`).join('');
+  const sel = document.getElementById('school-id');
+  const schools = d.schools.filter(s => s.total > 0 || s.enrolled > 0);
+  sel.innerHTML = (schools.length ? schools : d.schools).map(s =>
+    `<option value="${s.id}">${s.name} (${s.city})</option>`).join('');
+  if (schools[0]) {
+    document.getElementById('total').value = schools[0].total || schools[0].enrolled || 40;
+    document.getElementById('present').value = Math.min(30, schools[0].present || 30);
+  }
+  sel.addEventListener('change', () => {
+    const s = d.schools.find(x => x.id == sel.value);
+    if (s) {
+      document.getElementById('total').value = s.total || s.enrolled || 40;
+      document.getElementById('present').value = s.present || 30;
+    }
+  });
 });
 async function submit() {
-  const t = localStorage.getItem('roboclub_token');
-  if (!t) { location.href='/login'; return; }
-  const r = await fetch(API+'/api/v1/attendance/sessions', {
-    method:'POST',
-    headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},
-    body: JSON.stringify({
-      school_id: +document.getElementById('school-id').value,
-      present: +document.getElementById('present').value,
-      total: +document.getElementById('total').value,
-    }),
-  });
+  if (!localStorage.getItem('roboclub_token')) {
+    location.href = '/login?next=/checkin';
+    return;
+  }
   const msg = document.getElementById('msg');
-  if (r.ok) {
-    const d = await r.json();
-    msg.textContent = `Saved ${d.session.att}% (${d.session.present}/${d.session.total})`;
-  } else msg.textContent = 'Failed — login as trainer@roboclub.pk';
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Saving…';
+  const r = await apiPost('/api/v1/attendance/sessions', {
+    school_id: +document.getElementById('school-id').value,
+    present: +document.getElementById('present').value,
+    total: +document.getElementById('total').value,
+  });
+  if (r?.session) {
+    msg.style.color = 'var(--green)';
+    msg.textContent = `✓ ${r.session.att}% — ${r.session.present}/${r.session.total} saved`;
+    RoboClub?.toast('Check-in recorded');
+  } else {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Failed — login as trainer@roboclub.pk / trainer123';
+  }
 }
 </script>
 {% endblock %}

@@ -55,3 +55,19 @@ def test_notifications_paginated():
 def test_ceo_live():
     r = store.ceo_report_live()
     assert "sections" in r and r["pipeline_health"]["data_source"] == "live"
+
+
+def test_sync_ops_alerts():
+    n = store.sync_ops_alerts()
+    assert n >= 0
+
+
+def test_mark_notification_read():
+    items, _ = store.list_notifications_paginated(limit=1)
+    if items:
+        assert store.mark_notification_read(items[0]["id"]) is True
+
+
+def test_bundle_shell_version():
+    b = bundles.bundle_app_shell()
+    assert b.get("version") == store.APP_VERSION

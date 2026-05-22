@@ -3,15 +3,20 @@
 {% block content %}
 <div class="row-between mb20">
   <div><h2 class="page-title">Inbox <span id="page-source-badge" class="page-badge page-badge--live">Live</span></h2></div>
-  <select id="cat-filter" class="btn" onchange="load()"><option value="">All</option>
-    <option value="attendance">Attendance</option><option value="inventory">Inventory</option><option value="payment">Payment</option></select>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <select id="cat-filter" class="btn" onchange="load()"><option value="">All</option>
+      <option value="attendance">Attendance</option><option value="inventory">Inventory</option><option value="payment">Payment</option></select>
+    <button class="btn btn--cyan" onclick="readAll()">Mark all read</button>
+  </div>
 </div>
-<div class="panel mb20"><div id="rules-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px"></div></div>
-<div class="panel"><div id="notif-list"></div></div>
+<div class="panel panel--glass mb20"><div id="rules-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px"></div></div>
+<div class="panel panel--glass"><div id="notif-list"></div></div>
 {% endblock %}
 {% block scripts %}
 <script>
 const TS = {error:'var(--red)',warn:'var(--yellow)',success:'var(--green)',info:'var(--cyan)'};
+const L = () => (window.RoboClub && RoboClub.getLang ? (I18N[RoboClub.getLang()] || I18N.en) : I18N.en);
+
 async function load() {
   const cat = document.getElementById('cat-filter').value;
   const d = await api('/api/v1/bundle/notifications' + (cat ? '?category='+cat : ''));
@@ -19,22 +24,42 @@ async function load() {
   document.getElementById('rules-grid').innerHTML = d.rules.map(r => `
     <div style="padding:10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
       <b>${r.label}</b><br><span class="tag">${r.channels}</span>
-      <input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${r.rule_key}',this.checked)"/>
+      <label style="float:right"><input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${r.rule_key}',this.checked)"/> On</label>
     </div>`).join('');
+  const labels = L();
   document.getElementById('notif-list').innerHTML = d.items.length ? d.items.map(n => `
-    <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+    <div class="inbox-item ${n.read ? '' : 'inbox-item--unread'}">
       <b style="color:${TS[n.type]}">${n.title}</b> ${tag(n.category||'')}
-      <div style="font-size:12px;color:var(--muted)">${n.body}</div>
-      <button class="btn" onclick="resolveN(${n.id})">Resolve</button>
-      <button class="btn" onclick="snoozeN(${n.id})">Snooze</button>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${n.body}</div>
+      <div class="inbox-actions">
+        ${!n.read ? `<button class="btn" onclick="readN(${n.id})">${labels.markRead}</button>` : ''}
+        <button class="btn" onclick="resolveN(${n.id})">${labels.resolve}</button>
+        <button class="btn" onclick="snoozeN(${n.id})">${labels.snooze}</button>
+      </div>
     </div>`).join('') : '<p style="padding:20px;color:var(--muted)">Inbox clear.</p>';
   setBadgeCount(d.unread_count);
 }
-async function resolveN(id) { await apiPut(`/api/notifications/${id}/resolve`); load(); }
-async function snoozeN(id) { await apiPut(`/api/notifications/${id}/snooze?hours=24`); load(); }
+async function readN(id) {
+  await apiPut('/api/v1/notifications/' + id + '/read');
+  RoboClub?.toast('Marked read');
+  load();
+}
+async function readAll() {
+  await apiPost('/api/v1/notifications/read-all');
+  RoboClub?.toast('All marked read');
+  load();
+}
+async function resolveN(id) {
+  await apiPut('/api/v1/notifications/' + id + '/resolve');
+  load();
+}
+async function snoozeN(id) {
+  await apiPut('/api/v1/notifications/' + id + '/snooze', { hours: 24 });
+  load();
+}
 async function toggleRule(k, on) {
-  const t = localStorage.getItem('roboclub_token');
-  await fetch(API+`/api/v1/alert-rules/${k}`, {method:'PUT',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({enabled:on})});
+  await apiPut('/api/v1/alert-rules/' + k, { enabled: on });
+  RoboClub?.toast(on ? 'Rule enabled' : 'Rule disabled');
 }
 load();
 window.addEventListener('roboclub:tick', () => load());

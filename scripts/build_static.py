@@ -3,6 +3,7 @@ Build static HTML for Vercel from Flask/Jinja templates.
 """
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "frontend" / "templates"
 PUBLIC = ROOT / "public"
+STATIC = ROOT / "frontend" / "static"
+
+OPS_MODE = os.getenv("ROBOCLUB_OPS", "1") not in ("0", "false", "False")
 
 OPS_NAV = [
     {"id": "dashboard", "label": "Dashboard", "icon": "📊"},
@@ -66,6 +70,7 @@ def main() -> None:
         "ops_nav": OPS_NAV,
         "demo_nav": DEMO_NAV,
         "use_polling": True,
+        "ops_mode": OPS_MODE,
     }
 
     for page_id, template_name in PAGES:
@@ -80,12 +85,23 @@ def main() -> None:
         env.get_template("404.html").render(**ctx_base, current_page=""),
         encoding="utf-8",
     )
-    shutil.copy(PUBLIC / "pipeline.html", PUBLIC / "index.html")
+
+    index_src = PUBLIC / ("dashboard.html" if OPS_MODE else "pipeline.html")
+    shutil.copy(index_src, PUBLIC / "index.html")
+    print(f"  index <- {index_src.name} (ops_mode={OPS_MODE})")
+
+    css_dir = PUBLIC / "css"
+    css_dir.mkdir(exist_ok=True)
+    if (STATIC / "app.css").exists():
+        shutil.copy(STATIC / "app.css", css_dir / "app.css")
 
     js_dir = PUBLIC / "js"
     js_dir.mkdir(exist_ok=True)
-    for f in (ROOT / "frontend" / "static").glob("*.js"):
+    for f in STATIC.glob("*.js"):
         shutil.copy(f, js_dir / f.name)
+
+    if (STATIC / "manifest.json").exists():
+        shutil.copy(STATIC / "manifest.json", PUBLIC / "manifest.json")
 
     print(f"Done — {len(list(PUBLIC.glob('*.html')))} HTML files")
 

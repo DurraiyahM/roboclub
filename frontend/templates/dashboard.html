@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %} · Dashboard{% endblock %}
 {% block content %}
+<div id="welcome-strip" class="welcome-strip" style="display:none"></div>
 <div class="page-header">
   <div class="page-eyebrow">LIVE DASHBOARD</div>
   <h2 class="page-title">Co-Founder Operations <span id="page-source-badge" class="page-badge page-badge--live">Live</span></h2>
@@ -48,5 +49,13 @@ function renderSchools(schools) {
 }
 api('/api/v1/bundle/home').then(d => d && renderHome(d));
 window.addEventListener('roboclub:tick', e => { if (e.detail?.schools) renderSchools(e.detail.schools); });
+(function(){
+  const u = RoboClub?.getUser?.();
+  const w = document.getElementById('welcome-strip');
+  if (u && w) {
+    w.style.display = 'block';
+    w.innerHTML = `Welcome, <strong>${u.name}</strong> — ${u.role.toUpperCase()} · live schools & payments below`;
+  }
+})();
 </script>
 {% endblock %}

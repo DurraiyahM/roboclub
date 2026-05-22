@@ -7,6 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0f2d56" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>
     /* ── Reset & base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -225,14 +229,14 @@
     <div class="sidebar-nav">
       <div style="font-size:9px;color:var(--dim);padding:8px 20px 4px;font-family:var(--mono);letter-spacing:2px">OPERATIONS</div>
       {% for n in ops_nav %}
-      <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}">
+      <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}" data-nav-id="{{ n.id }}">
         <span>{{ n.icon }}</span>{{ n.label }}
         {% if n.id == 'notifications' %}<span class="nav-badge" id="notif-badge" style="display:none">0</span>{% endif %}
       </a>
       {% endfor %}
-      <div style="font-size:9px;color:var(--dim);padding:12px 20px 4px;font-family:var(--mono);letter-spacing:2px">ARCHITECTURE (DEMO)</div>
+      <div id="demo-nav-section" style="font-size:9px;color:var(--dim);padding:12px 20px 4px;font-family:var(--mono);letter-spacing:2px">ARCHITECTURE (DEMO)</div>
       {% for n in demo_nav %}
-      <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}">
+      <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}" data-nav-id="{{ n.id }}">
         <span>{{ n.icon }}</span>{{ n.label }}
       </a>
       {% endfor %}
@@ -257,7 +261,7 @@
       </div>
       <button class="btn" data-set-lang="en" type="button">EN</button>
       <button class="btn" data-set-lang="ur" type="button">اردو</button>
-      <a href="/login" class="btn btn--cyan" data-i18n="login">Login</a>
+      <a href="/login" class="btn btn--cyan btn-login" data-i18n="login">Login</a>
     </div>
     <div id="critical-banner" class="critical-banner row-center"></div>
     <main class="main-content">
@@ -267,12 +271,13 @@
   </div>
 </div>
 <nav class="mobile-nav">
-  <a href="/dashboard">📊</a>
-  <a href="/attendance">🏫</a>
-  <a href="/checkin">✓</a>
-  <a href="/notifications">🔔</a>
-  <a href="/inventory">📦</a>
+  <a href="/dashboard" data-nav-id="dashboard">📊<span>Home</span></a>
+  <a href="/attendance" data-nav-id="attendance">🏫<span>Attend</span></a>
+  <a href="/checkin" data-nav-id="checkin">✓<span>Check-in</span></a>
+  <a href="/notifications" data-nav-id="notifications">🔔<span>Alerts</span></a>
+  <a href="/payments" data-nav-id="payments">💰<span>Pay</span></a>
 </nav>
+<div id="app-version" class="app-version">v4</div>
 
 <script>
   const API = "{{ api_url }}";
@@ -301,26 +306,34 @@
   }
 
   async function apiPost(path, body) {
+    const h = {};
+    const t = localStorage.getItem('roboclub_token');
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    if (body !== undefined) h['Content-Type'] = 'application/json';
     try {
-      const opts = { method: 'POST', headers: {} };
-      if (body !== undefined) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(body);
-      }
-      const r = await fetch(API + path, opts);
+      const r = await fetch(API + path, {
+        method: 'POST',
+        headers: h,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      if (r.status === 401) { location.href = '/login'; return null; }
       if (!r.ok) throw new Error(r.status);
       return r.json();
     } catch(e) { console.error('API POST', path, e); return null; }
   }
 
   async function apiPut(path, body) {
+    const h = {};
+    const t = localStorage.getItem('roboclub_token');
+    if (t) h['Authorization'] = 'Bearer ' + t;
+    if (body !== undefined) h['Content-Type'] = 'application/json';
     try {
-      const opts = { method: 'PUT', headers: {} };
-      if (body !== undefined) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(body);
-      }
-      const r = await fetch(API + path, opts);
+      const r = await fetch(API + path, {
+        method: 'PUT',
+        headers: h,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      if (r.status === 401) { location.href = '/login'; return null; }
       if (!r.ok) throw new Error(r.status);
       return r.json();
     } catch(e) { console.error('API PUT', path, e); return null; }

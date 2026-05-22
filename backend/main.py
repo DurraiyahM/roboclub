@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="RoboClub Pipeline API - Pakistan", version="3.0.0", lifespan=lifespan)
+app = FastAPI(title="RoboClub Pipeline API - Pakistan", version=store.APP_VERSION, lifespan=lifespan)
 app.include_router(v1_router)
 
 app.add_middleware(

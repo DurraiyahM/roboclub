@@ -6,8 +6,11 @@ from typing import Any, Dict, List, Optional
 
 from contextlib import contextmanager
 
-from database import create_notification, get_db, _now_iso
+import database as db_mod
+from database import create_notification, get_db, _now_iso, sync_inventory_alerts
 from auth import hash_password
+
+APP_VERSION = "4.0.0"
 
 
 @contextmanager
@@ -589,6 +592,68 @@ def toggle_alert_rule(rule_key: str, enabled: bool) -> bool:
             (1 if enabled else 0, rule_key),
         )
         return cur.rowcount > 0
+
+
+def _rule_enabled(rules: Dict[str, bool], key: str) -> bool:
+    return rules.get(key, True)
+
+
+def sync_ops_alerts() -> int:
+    """Fire alert rules into the notification inbox (deduped by ref_key)."""
+    rules = {r["rule_key"]: r["enabled"] for r in list_alert_rules()}
+    created = 0
+    if _rule_enabled(rules, "inventory_low"):
+        created += sync_inventory_alerts()
+    if _rule_enabled(rules, "payment_overdue"):
+        for p in list_payments(status="overdue"):
+            ref = f"payment:overdue:{p['id']}"
+            create_notification(
+                ntype="error",
+                title="Payment overdue",
+                body=f"{p['school_name']} — {p['amount_display']} ({p['days_overdue']}d)",
+                ref_key=ref,
+                category="payment",
+            )
+            created += 1
+    if _rule_enabled(rules, "mou_renewal"):
+        for s in list_schools():
+            if s.get("mou_status") not in ("renewal", "pending", "draft"):
+                continue
+            label = "renewal due" if s["mou_status"] == "renewal" else "MOU pending"
+            create_notification(
+                ntype="warn",
+                title=f"MOU {label}",
+                body=f"{s['name']} — status {s['mou_status']}, next {s.get('next', 'TBD')}",
+                ref_key=f"mou:{s['id']}",
+                category="general",
+            )
+            created += 1
+    if _rule_enabled(rules, "no_checkin"):
+        today = date.today().isoformat()
+        with get_db() as conn:
+            for s in conn.execute("SELECT id, name FROM schools WHERE enrolled > 0").fetchall():
+                hit = conn.execute(
+                    "SELECT 1 FROM attendance_sessions WHERE school_id = ? AND session_date = ?",
+                    (s["id"], today),
+                ).fetchone()
+                if not hit:
+                    create_notification(
+                        ntype="warn",
+                        title="No check-in today",
+                        body=f"{s['name']} — no session recorded yet",
+                        ref_key=f"nocheckin:{s['id']}:{today}",
+                        category="attendance",
+                    )
+                    created += 1
+    return created
+
+
+def mark_notification_read(notif_id: int) -> bool:
+    return db_mod.mark_notification_read(notif_id)
+
+
+def mark_all_notifications_read() -> int:
+    return db_mod.mark_all_notifications_read()
 
 
 def global_search(q: str) -> Dict[str, Any]:

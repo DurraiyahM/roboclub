@@ -121,8 +121,13 @@ def bundle_school(school_id: int) -> Optional[Dict[str, Any]]:
 
 
 def bundle_app_shell() -> Dict[str, Any]:
+    import os
+
+    ops_mode = os.getenv("ROBOCLUB_OPS", "1") not in ("0", "false", "False")
     return {
         "critical": store.critical_notifications(),
         "unread_count": db.unread_notification_count(),
         "meta": store.page_meta(),
+        "version": store.APP_VERSION,
+        "ops_mode": ops_mode,
     }

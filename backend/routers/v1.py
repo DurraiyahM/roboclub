@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 import bundles
+import database as db
 import store
 from auth import create_token, parse_token, verify_password
 from models import (
@@ -131,12 +132,23 @@ def live_global():
     """One poll: tick simulation + shell data for badge/banner."""
     import importlib
 
+    store.sync_ops_alerts()
     main_mod = importlib.import_module("main")
     if not main_mod._schools_state:
         main_mod._init_schools_state()
     tick = main_mod._run_live_tick()
     shell = bundles.bundle_app_shell()
     return {**tick, **shell, "schools": store.list_schools()}
+
+
+@router.get("/version")
+def version():
+    import os
+
+    return {
+        "version": store.APP_VERSION,
+        "ops_mode": os.getenv("ROBOCLUB_OPS", "1") not in ("0", "false", "False"),
+    }
 
 
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -244,6 +256,19 @@ def notifications(
 ):
     items, total = store.list_notifications_paginated(category, include_resolved, limit, offset)
     return {"items": items, "total": total}
+
+
+@router.put("/notifications/{notif_id}/read")
+def read_notif(notif_id: int):
+    if store.mark_notification_read(notif_id):
+        return {"ok": True, "unread_count": db.unread_notification_count()}
+    raise HTTPException(404, "Not found")
+
+
+@router.post("/notifications/read-all")
+def read_all_notifs():
+    count = store.mark_all_notifications_read()
+    return {"ok": True, "marked": count, "unread_count": 0}
 
 
 @router.put("/notifications/{notif_id}/resolve")

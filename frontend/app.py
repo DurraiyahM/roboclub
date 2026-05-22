@@ -47,8 +47,13 @@ def _ctx(page: str):
     )
 
 
+OPS_MODE = os.getenv("ROBOCLUB_OPS", "1") not in ("0", "false", "False")
+
+
 @app.route("/")
 def index():
+    if OPS_MODE:
+        return render_template("dashboard.html", **_ctx("dashboard"))
     return render_template("pipeline.html", **_ctx("pipeline"))
 
 

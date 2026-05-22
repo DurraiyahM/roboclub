@@ -35,7 +35,8 @@ async function doLogin() {
     const d = await r.json();
     localStorage.setItem('roboclub_token', d.token);
     localStorage.setItem('roboclub_user', JSON.stringify(d.user));
-    location.href = d.home || '/dashboard';
+    const next = new URLSearchParams(location.search).get('next');
+    location.href = next || d.home || '/dashboard';
   } catch (e) {
     const el = document.getElementById('login-err');
     el.style.display = 'block';

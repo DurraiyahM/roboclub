@@ -6,9 +6,21 @@
 {% block scripts %}
 <script>
 const id = new URLSearchParams(location.search).get('id');
+function isOps() {
+  try { return JSON.parse(localStorage.getItem('roboclub_user')||'{}').role === 'ops'; } catch(_) { return false; }
+}
+async function saveSchool() {
+  const body = {
+    enrolled: +document.getElementById('edit-enrolled').value,
+    mou_status: document.getElementById('edit-mou').value,
+    next_session: document.getElementById('edit-next').value,
+  };
+  const r = await apiPut('/api/v1/schools/' + id, body);
+  if (r) { RoboClub?.toast('School updated'); load(); }
+}
 async function load() {
   if (!id) { document.getElementById('school-root').innerHTML = '<p>Select a school from search or dashboard.</p>'; return; }
-  const s = await api('/api/v1/schools/' + id);
+  const s = await api('/api/v1/bundle/school/' + id) || await api('/api/v1/schools/' + id);
   if (!s) return;
   const hist = (s.attendance_history || []).map(h =>
     `<div class="row-between" style="font-size:11px;padding:4px 0"><span>${h.date}</span><span style="font-family:var(--mono);color:var(--cyan)">${h.att}%</span></div>`
@@ -17,11 +29,30 @@ async function load() {
     `<div class="row-between" style="font-size:11px;padding:6px 0;border-bottom:1px solid var(--border)">
       <span>${p.amount_display}</span><span class="tag tag--${p.status==='overdue'?'red':p.status==='paid'?'green':'yellow'}">${p.status}</span></div>`
   ).join('');
+  const edit = isOps() ? `
+  <div class="panel panel--glass mt20">
+    <div class="section-title"><span class="section-title__text">Update school (ops)</span></div>
+    <div class="school-edit">
+      <div><label style="font-size:11px;color:var(--muted)">Enrolled</label>
+        <input id="edit-enrolled" type="number" class="search-input" value="${s.total || s.enrolled || 0}" /></div>
+      <div><label style="font-size:11px;color:var(--muted)">MOU status</label>
+        <select id="edit-mou" class="search-input">
+          <option value="active" ${s.mou_status==='active'?'selected':''}>active</option>
+          <option value="pending" ${s.mou_status==='pending'?'selected':''}>pending</option>
+          <option value="renewal" ${s.mou_status==='renewal'?'selected':''}>renewal</option>
+          <option value="draft" ${s.mou_status==='draft'?'selected':''}>draft</option>
+        </select></div>
+      <div><label style="font-size:11px;color:var(--muted)">Next session</label>
+        <input id="edit-next" class="search-input" value="${s.next || ''}" /></div>
+    </div>
+    <button class="btn btn--green mt12" onclick="saveSchool()">Save changes</button>
+  </div>` : '';
+  const exportUrl = s.export_url || (API + '/api/v1/schools/' + id + '/attendance/export');
   document.getElementById('school-root').innerHTML = `
   <div class="page-header">
     <div class="page-eyebrow">SCHOOL DETAIL</div>
     <h2 class="page-title">${s.name} <span class="page-badge page-badge--live">Live</span></h2>
-    <p class="page-sub">${s.city} · MOU ${s.mou} · <a href="${API}/api/v1/schools/${id}/attendance/export" style="color:var(--cyan)">Export CSV</a></p>
+    <p class="page-sub">${s.city} · MOU ${s.mou} · <a href="${exportUrl}" style="color:var(--cyan)">Export CSV</a></p>
   </div>
   <div class="g3 mb20">
     <div class="stat-card"><div class="stat-card__label">Attendance</div><div class="stat-card__val" style="color:var(--cyan)">${s.att}%</div></div>
@@ -29,9 +60,9 @@ async function load() {
     <div class="stat-card"><div class="stat-card__label">Next session</div><div class="stat-card__val" style="font-size:14px">${s.next}</div></div>
   </div>
   <div class="g2">
-    <div class="panel"><div class="section-title"><span class="section-title__text">14-day attendance</span></div>${hist}</div>
-    <div class="panel"><div class="section-title"><span class="section-title__text">Payments</span></div>${pays}</div>
-  </div>`;
+    <div class="panel panel--glass"><div class="section-title"><span class="section-title__text">14-day attendance</span></div>${hist}</div>
+    <div class="panel panel--glass"><div class="section-title"><span class="section-title__text">Payments</span></div>${pays || '<p style="color:var(--muted)">None</p>'}</div>
+  </div>${edit}`;
 }
 load();
 </script>
