@@ -21,7 +21,7 @@ async function load() {
   <div class="page-header">
     <div class="page-eyebrow">SCHOOL DETAIL</div>
     <h2 class="page-title">${s.name} <span class="page-badge page-badge--live">Live</span></h2>
-    <p class="page-sub">${s.city} · MOU ${s.mou}</p>
+    <p class="page-sub">${s.city} · MOU ${s.mou} · <a href="${API}/api/v1/schools/${id}/attendance/export" style="color:var(--cyan)">Export CSV</a></p>
   </div>
   <div class="g3 mb20">
     <div class="stat-card"><div class="stat-card__label">Attendance</div><div class="stat-card__val" style="color:var(--cyan)">${s.att}%</div></div>

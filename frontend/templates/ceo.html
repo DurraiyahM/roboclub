@@ -5,7 +5,7 @@
 <div class="row-between mb20">
   <div>
     <div class="page-eyebrow">CEO DIGEST</div>
-    <h2 class="page-title">Weekly Report → Germany 🇩🇪</h2>
+    <h2 class="page-title">Weekly Report → Germany 🇩🇪 <span class="page-badge page-badge--live">Live</span></h2>
     <p class="page-sub">Auto-generated from Kafka · ceo.report topic · Delivered via email</p>
   </div>
   <button id="send-btn" class="btn btn--cyan" onclick="sendReport()" style="padding:10px 22px;font-size:12px;font-weight:700">
@@ -39,7 +39,7 @@ const SECTION_META = {
 };
 
 async function loadReport() {
-  const r = await api('/api/ceo/report');
+  const r = await api('/api/v1/bundle/ceo');
   if (!r) return;
 
   const card = document.getElementById('report-card');

@@ -1,10 +1,8 @@
 """
 Build static HTML for Vercel from Flask/Jinja templates.
-API calls use same origin (empty api_url).
 """
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
@@ -14,18 +12,24 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "frontend" / "templates"
 PUBLIC = ROOT / "public"
 
-NAV = [
+OPS_NAV = [
+    {"id": "dashboard", "label": "Dashboard", "icon": "📊"},
+    {"id": "attendance", "label": "Attendance", "icon": "🏫"},
+    {"id": "checkin", "label": "Check-in", "icon": "✓"},
+    {"id": "payments", "label": "Payments", "icon": "💰"},
+    {"id": "inventory", "label": "Inventory", "icon": "📦"},
+    {"id": "trainers", "label": "Trainers", "icon": "👨‍🏫"},
+    {"id": "notifications", "label": "Alerts", "icon": "🔔"},
+    {"id": "ceo", "label": "CEO Report", "icon": "🇩🇪"},
+    {"id": "admin", "label": "Admin", "icon": "⚙"},
+]
+DEMO_NAV = [
     {"id": "pipeline", "label": "Pipeline", "icon": "⚡"},
     {"id": "kafka", "label": "Kafka", "icon": "🌊"},
     {"id": "docker", "label": "Docker", "icon": "🐳"},
     {"id": "ingestion", "label": "Ingestion", "icon": "🔄"},
-    {"id": "dashboard", "label": "Dashboard", "icon": "📊"},
-    {"id": "attendance", "label": "Attendance", "icon": "🏫"},
-    {"id": "inventory", "label": "Inventory", "icon": "📦"},
-    {"id": "trainers", "label": "Trainers", "icon": "👨‍🏫"},
-    {"id": "ceo", "label": "CEO Report", "icon": "🇩🇪"},
-    {"id": "notifications", "label": "Alerts", "icon": "🔔"},
 ]
+NAV = OPS_NAV + DEMO_NAV
 
 PAGES = [
     ("pipeline", "pipeline.html"),
@@ -42,6 +46,7 @@ PAGES = [
     ("ceo", "ceo.html"),
     ("notifications", "notifications.html"),
     ("login", "login.html"),
+    ("admin", "admin.html"),
 ]
 
 
@@ -58,31 +63,31 @@ def main() -> None:
     ctx_base = {
         "api_url": "",
         "nav": NAV,
+        "ops_nav": OPS_NAV,
+        "demo_nav": DEMO_NAV,
         "use_polling": True,
     }
 
     for page_id, template_name in PAGES:
         tpl = env.get_template(template_name)
-        html = tpl.render(**ctx_base, current_page=page_id)
-        out = PUBLIC / template_name
-        out.write_text(html, encoding="utf-8")
-        print(f"  built {out.name}")
+        (PUBLIC / template_name).write_text(
+            tpl.render(**ctx_base, current_page=page_id),
+            encoding="utf-8",
+        )
+        print(f"  built {template_name}")
 
-    tpl = env.get_template("404.html")
     (PUBLIC / "404.html").write_text(
-        tpl.render(**ctx_base, current_page=""),
+        env.get_template("404.html").render(**ctx_base, current_page=""),
         encoding="utf-8",
     )
-
-    # Default entry
     shutil.copy(PUBLIC / "pipeline.html", PUBLIC / "index.html")
-    static_src = ROOT / "frontend" / "static"
-    if static_src.exists():
-        js_dir = PUBLIC / "js"
-        js_dir.mkdir(exist_ok=True)
-        for f in static_src.glob("*.js"):
-            shutil.copy(f, js_dir / f.name)
-    print(f"Done — {len(list(PUBLIC.glob('*.html')))} files in public/")
+
+    js_dir = PUBLIC / "js"
+    js_dir.mkdir(exist_ok=True)
+    for f in (ROOT / "frontend" / "static").glob("*.js"):
+        shutil.copy(f, js_dir / f.name)
+
+    print(f"Done — {len(list(PUBLIC.glob('*.html')))} HTML files")
 
 
 if __name__ == "__main__":

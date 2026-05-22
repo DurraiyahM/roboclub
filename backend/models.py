@@ -42,3 +42,20 @@ class AlertRuleToggle(BaseModel):
 
 class SnoozeRequest(BaseModel):
     hours: int = 24
+
+
+class PaymentCreate(BaseModel):
+    school_id: int
+    amount_pkr: int
+    due_date: str
+    description: str = ""
+
+
+class PaymentPaid(BaseModel):
+    pass
+
+
+class SchoolUpdate(BaseModel):
+    enrolled: Optional[int] = None
+    mou_status: Optional[str] = None
+    next_session: Optional[str] = None

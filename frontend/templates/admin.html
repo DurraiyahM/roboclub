@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %} · Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="page-title">Ops Admin <span class="page-badge page-badge--live">Live</span></h2>
+  <p class="page-sub">Record payment · requires ops login</p>
+</div>
+<div class="g2">
+  <div class="panel">
+    <div class="section-title"><span class="section-title__text">New invoice</span></div>
+    <select id="pay-school" class="search-input" style="width:100%;margin-bottom:8px"></select>
+    <input id="pay-amount" type="number" class="search-input" placeholder="Amount PKR" style="width:100%;margin-bottom:8px" />
+    <input id="pay-due" type="date" class="search-input" style="width:100%;margin-bottom:8px" />
+    <button class="btn btn--green" onclick="addPayment()">Create</button>
+  </div>
+  <div class="panel">
+    <div class="section-title"><span class="section-title__text">Mark paid</span></div>
+    <input id="pay-id" type="number" class="search-input" placeholder="Payment ID" style="width:100%;margin-bottom:8px" />
+    <button class="btn btn--cyan" onclick="markPaid()">Mark paid</button>
+  </div>
+</div>
+<p id="admin-msg" style="margin-top:12px;font-size:12px;color:var(--green)"></p>
+{% endblock %}
+{% block scripts %}
+<script>
+async function load() {
+  const d = await api('/api/v1/bundle/payments');
+  if (!d) return;
+  document.getElementById('pay-school').innerHTML = d.schools.map(s =>
+    `<option value="${s.id}">${s.name}</option>`).join('');
+}
+async function addPayment() {
+  const token = localStorage.getItem('roboclub_token');
+  const r = await fetch(API + '/api/v1/payments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      school_id: +document.getElementById('pay-school').value,
+      amount_pkr: +document.getElementById('pay-amount').value,
+      due_date: document.getElementById('pay-due').value,
+      description: 'Invoice',
+    }),
+  });
+  document.getElementById('admin-msg').textContent = r.ok ? 'Payment created' : 'Login as ops first';
+}
+async function markPaid() {
+  const token = localStorage.getItem('roboclub_token');
+  const id = document.getElementById('pay-id').value;
+  const r = await fetch(API + `/api/v1/payments/${id}/paid`, {
+    method: 'PUT', headers: { Authorization: 'Bearer ' + token },
+  });
+  document.getElementById('admin-msg').textContent = r.ok ? 'Marked paid' : 'Failed';
+}
+load();
+</script>
+{% endblock %}

@@ -92,7 +92,7 @@ function showAddForm() { document.getElementById('add-panel').style.display = 'b
 function hideAddForm() { document.getElementById('add-panel').style.display = 'none'; }
 
 async function loadInventory() {
-  const data = await api('/api/inventory');
+  const data = await api('/api/v1/bundle/inventory');
   if (!data) return;
 
   const s = data.summary;

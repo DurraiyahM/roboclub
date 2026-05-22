@@ -80,6 +80,14 @@ Open http://localhost:5000
 | PUT | `/api/notifications/{id}/read` | Mark one notification read |
 | PUT | `/api/notifications/all/read` | Mark all notifications read |
 | GET | `/api/notifications/unread-count` | Badge count |
+| GET | `/api/v1/bundle/home` | Dashboard (1 request) |
+| GET | `/api/v1/bundle/attendance` | Attendance page bundle |
+| GET | `/api/v1/bundle/notifications` | Alerts + rules |
+| GET | `/api/v1/bundle/payments` | Payments bundle |
+| GET | `/api/v1/live` | Single live poll (Vercel) |
+| POST | `/api/v1/auth/login` | Login (ops/trainer/ceo) |
+| POST | `/api/v1/attendance/sessions` | Trainer check-in |
+| GET | `/api/v1/schools/{id}/attendance/export` | CSV export |
 | GET | `/api/dashboard/kpis` | Live KPI metrics |
 | GET | `/api/dashboard/schools` | School status grid |
 | GET | `/api/ingestion/sources` | Ingestion pipeline sources |

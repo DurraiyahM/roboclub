@@ -26,6 +26,7 @@
     { "source": "/school", "destination": "/school.html" },
     { "source": "/payments", "destination": "/payments.html" },
     { "source": "/login", "destination": "/login.html" },
+    { "source": "/admin", "destination": "/admin.html" },
     { "source": "/js/(.*)", "destination": "/js/$1" },
     { "source": "/inventory", "destination": "/inventory.html" },
     { "source": "/trainers", "destination": "/trainers.html" },

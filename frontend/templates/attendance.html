@@ -1,125 +1,25 @@
 {% extends "base.html" %}
 {% block title %} · Attendance{% endblock %}
-
 {% block content %}
-<div class="row-between mb20">
-  <div>
-    <div class="page-eyebrow">LIVE ATTENDANCE</div>
-    <h2 class="page-title">School Check-in Monitor</h2>
-    <p class="page-sub">Kafka topic <code style="font-family:var(--mono);color:var(--cyan)">attendance.events</code> · real-time SSE</p>
-  </div>
-  <div class="row-center">
-    <span class="dot dot--pulse"></span>
-    <span style="font-size:11px;color:var(--green);font-family:var(--mono)">STREAM LIVE</span>
-  </div>
-</div>
-
-<div class="g2 mb20">
-  <div class="stat-card">
-    <div class="stat-card__label">Schools reporting</div>
-    <div class="stat-card__val" id="stat-schools" style="color:var(--cyan)">—</div>
-    <div class="stat-card__sub" style="color:var(--muted)">Active sessions today</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-card__label">Avg attendance</div>
-    <div class="stat-card__val" id="stat-avg" style="color:var(--green)">—</div>
-    <div class="stat-card__sub" style="color:var(--muted)">Across live schools</div>
-  </div>
-</div>
-
-<div class="panel mb20">
-  <div class="section-title">
-    <span class="section-title__icon">📡</span>
-    <span class="section-title__text">Live Check-in Feed</span>
-    <div class="section-title__line"></div>
-  </div>
-  <div id="checkin-feed" style="display:grid;gap:6px;min-height:80px">
-    <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Waiting for check-ins…</div>
-  </div>
-</div>
-
-<div class="panel">
-  <div class="section-title">
-    <span class="section-title__icon">🏫</span>
-    <span class="section-title__text">School Attendance Board</span>
-    <div class="section-title__line"></div>
-  </div>
-  <div id="att-board" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
-    <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
-  </div>
-</div>
+<div class="page-header"><h2 class="page-title">Attendance <span class="page-badge page-badge--live">Live</span></h2></div>
+<div class="g2 mb20"><div class="stat-card"><div class="stat-card__label">Avg today</div><div class="stat-card__val" id="stat-avg">—</div></div>
+<div class="stat-card"><div class="stat-card__label"><a href="/checkin">Trainer check-in →</a></div></div></div>
+<div class="panel mb20"><div id="checkin-feed"></div></div>
+<div class="panel"><div id="att-board"></div></div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-const STATUS_COLOR = {green:"var(--green)", yellow:"var(--yellow)", cyan:"var(--cyan)", muted:"var(--muted)"};
-let checkins = [];
-
-function updateStats(schools) {
-  const live = schools.filter(s => s.total > 0);
-  const avg = live.length
-    ? Math.round(live.reduce((a, s) => a + s.att, 0) / live.length)
-    : 0;
-  document.getElementById('stat-schools').textContent = live.length;
-  document.getElementById('stat-avg').textContent = avg + '%';
+function render(d) {
+  document.getElementById('stat-avg').textContent = d.avg + '%';
+  document.getElementById('att-board').innerHTML = d.schools.map(s => `
+    <div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+      <b>${s.name}</b> <span style="float:right;font-family:var(--mono)">${s.att}%</span>
+      <div style="font-size:11px;color:var(--muted)">${s.present}/${s.total}</div></div>`).join('');
+  document.getElementById('checkin-feed').innerHTML = d.sessions.slice(0,10).map(s => `
+    <div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)">
+      ${s.school_name} · ${s.present}/${s.total} (${s.att}%) · ${s.session_date}</div>`).join('') || '<p style="color:var(--muted)">No sessions yet</p>';
 }
-
-function renderBoard(schools) {
-  updateStats(schools);
-  document.getElementById('att-board').innerHTML = schools.map(s => {
-    const c = STATUS_COLOR[s.status] || 'var(--muted)';
-    const pct = s.total ? Math.round(100 * s.present / s.total) : 0;
-    const barW = s.total ? s.att : 0;
-    return `
-    <div style="background:rgba(255,255,255,.02);border:1px solid ${c}44;border-radius:10px;padding:14px 16px">
-      <div class="row-between mb12">
-        <div>
-          <div style="font-weight:700;font-size:14px">${s.name}</div>
-          <div style="font-size:11px;color:var(--muted)">${s.city}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:${c}">${s.att || 0}%</div>
-          ${s.total ? `<div style="font-size:11px;color:var(--muted)">${s.present}/${s.total}</div>` : '<div style="font-size:11px;color:var(--dim)">No session</div>'}
-        </div>
-      </div>
-      <div class="cpu-track mb12"><div class="cpu-bar" style="width:${barW}%;background:${c}"></div></div>
-      ${s.trainer ? `<div style="font-size:11px;color:var(--dim)">👨‍🏫 ${s.trainer}</div>` : ''}
-    </div>`;
-  }).join('');
-}
-
-function pushCheckin(update) {
-  checkins = [{...update, ts: new Date().toLocaleTimeString()}, ...checkins].slice(0, 12);
-  const feed = document.getElementById('checkin-feed');
-  feed.innerHTML = checkins.map((u, i) => `
-    <div style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;padding:10px 14px;border-radius:8px;
-      background:${i===0?'rgba(56,189,248,.06)':'rgba(255,255,255,.02)'};
-      border:1px solid ${i===0?'rgba(56,189,248,.25)':'var(--border)'};${i===0?'animation:fadeIn .35s':''}">
-      <span class="dot dot--pulse"></span>
-      <div>
-        <span style="font-weight:600;color:var(--text);font-size:13px">${u.school}</span>
-        <span style="font-size:12px;color:var(--muted);margin-left:8px">${u.present}/${u.total} · ${u.att}%</span>
-        ${u.trainer ? `<div style="font-size:11px;color:var(--dim);margin-top:2px">${u.trainer}</div>` : ''}
-      </div>
-      <span style="font-size:10px;color:var(--dim);font-family:var(--mono)">${u.ts}</span>
-    </div>`).join('');
-}
-
-api('/api/attendance/live').then(d => { if (d && d.schools) renderBoard(d.schools); });
-
-if (USE_POLLING) {
-  window.addEventListener('roboclub:tick', ev => {
-    const t = ev.detail;
-    if (t?.attendance?.schools) renderBoard(t.attendance.schools);
-    if (t?.attendance?.update) pushCheckin(t.attendance.update);
-  });
-} else {
-  const attEs = new EventSource(API + '/api/attendance/stream');
-  attEs.onmessage = ev => {
-    const d = JSON.parse(ev.data);
-    if (d.schools) renderBoard(d.schools);
-    if (d.update) pushCheckin(d.update);
-  };
-}
+api('/api/v1/bundle/attendance').then(d => d && render(d));
+window.addEventListener('roboclub:tick', e => { if (e.detail?.schools) api('/api/v1/bundle/attendance').then(render); });
 </script>
 {% endblock %}

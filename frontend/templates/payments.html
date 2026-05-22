@@ -1,36 +1,24 @@
 {% extends "base.html" %}
 {% block title %} · Payments{% endblock %}
 {% block content %}
-<div class="page-header">
-  <div class="page-eyebrow">FINANCE</div>
-  <h2 class="page-title">Payments &amp; Invoices <span id="page-source-badge" class="page-badge page-badge--live">Live</span></h2>
-</div>
+<div class="page-header"><h2 class="page-title">Payments <span class="page-badge page-badge--live">Live</span></h2>
+  <p class="page-sub"><a href="/admin">Ops admin →</a> create invoice / mark paid</p></div>
 <div class="g3 mb20" id="pay-summary"></div>
-<div class="panel">
-  <table class="data-table">
-    <thead><tr><th>School</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead>
-    <tbody id="pay-rows"></tbody>
-  </table>
-</div>
+<div class="panel"><table class="data-table"><thead><tr><th>School</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody id="pay-rows"></tbody></table></div>
 {% endblock %}
 {% block scripts %}
 <script>
-async function load() {
-  const d = await api('/api/v1/payments');
+api('/api/v1/bundle/payments').then(d => {
   if (!d) return;
   const s = d.summary;
   document.getElementById('pay-summary').innerHTML = `
-    <div class="stat-card" style="border-left:3px solid var(--red)"><div class="stat-card__label">Overdue</div><div class="stat-card__val" style="color:var(--red)">${s.overdue_count}</div></div>
-    <div class="stat-card" style="border-left:3px solid var(--yellow)"><div class="stat-card__label">Outstanding</div><div class="stat-card__val" style="color:var(--yellow)">${s.outstanding_display}</div></div>
-    <div class="stat-card" style="border-left:3px solid var(--green)"><div class="stat-card__label">Live records</div><div class="stat-card__val">${d.items.length}</div></div>`;
-  document.getElementById('pay-rows').innerHTML = d.items.map(p => `
-    <tr>
-      <td><a href="/school?id=${p.school_id}" style="color:var(--cyan)">${p.school_name}</a></td>
-      <td style="font-family:var(--mono)">${p.amount_display}</td>
-      <td>${p.due_date}${p.days_overdue ? ' · ' + p.days_overdue + 'd late' : ''}</td>
-      <td><span class="tag tag--${p.status==='overdue'?'red':p.status==='paid'?'green':'yellow'}">${p.status}</span></td>
-    </tr>`).join('');
-}
-load();
+    <div class="stat-card"><div class="stat-card__label">Overdue</div><div class="stat-card__val" style="color:var(--red)">${s.overdue_count}</div></div>
+    <div class="stat-card"><div class="stat-card__label">Outstanding</div><div class="stat-card__val">${s.outstanding_display}</div></div>
+    <div class="stat-card"><div class="stat-card__label">Records</div><div class="stat-card__val">${d.total}</div></div>`;
+  document.getElementById('pay-rows').innerHTML = d.items.map(p => `<tr>
+    <td><a href="/school?id=${p.school_id}">${p.school_name}</a></td>
+    <td>${p.amount_display}</td><td>${p.due_date}</td>
+    <td><span class="tag">${p.status}</span></td></tr>`).join('');
+});
 </script>
 {% endblock %}

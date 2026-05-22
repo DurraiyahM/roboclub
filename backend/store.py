@@ -1,12 +1,19 @@
 """Persistent schools, trainers, attendance, payments, users, alert rules."""
 from __future__ import annotations
 
-import hashlib
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from contextlib import contextmanager
+
 from database import create_notification, get_db, _now_iso
 from auth import hash_password
+
+
+@contextmanager
+def get_db_ctx():
+    with get_db() as conn:
+        yield conn
 
 SCHOOLS_SEED = [
     {"name": "Beacon House School", "city": "Karachi", "mou_status": "active", "enrolled": 42, "next_session": "Today 3PM"},
@@ -115,7 +122,42 @@ def init_store() -> None:
             """
         )
         _migrate_notifications(conn)
+        _migrate_extra(conn)
         _seed_if_empty(conn)
+        _create_indexes(conn)
+
+
+def _migrate_extra(conn) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            detail TEXT,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+
+
+def _create_indexes(conn) -> None:
+    for stmt in [
+        "CREATE INDEX IF NOT EXISTS idx_sessions_school_date ON attendance_sessions(school_id, session_date)",
+        "CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_inbox ON notifications(resolved, read)",
+        "CREATE INDEX IF NOT EXISTS idx_schools_name ON schools(name)",
+    ]:
+        conn.execute(stmt)
+
+
+def log_audit(user_id: Optional[int], action: str, entity: str, detail: str = "") -> None:
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO audit_log (user_id, action, entity, detail, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, action, entity, detail, _now_iso()),
+        )
 
 
 def _migrate_notifications(conn) -> None:
@@ -263,6 +305,10 @@ def create_attendance_session(
             "UPDATE schools SET present = ?, enrolled = MAX(enrolled, ?), updated_at = ? WHERE id = ?",
             (present, total, ts, school_id),
         )
+        if trainer_id:
+            conn.execute(
+                "UPDATE trainers SET sessions = sessions + 1 WHERE id = ?", (trainer_id,)
+            )
     school = get_school(school_id)
     if school:
         create_notification(
@@ -610,13 +656,182 @@ def page_meta() -> Dict[str, Any]:
         "kafka": "demo",
         "docker": "demo",
         "ingestion": "demo",
-        "dashboard": "mixed",
+        "dashboard": "live",
         "attendance": "live",
         "inventory": "live",
         "trainers": "live",
         "payments": "live",
         "notifications": "live",
-        "ceo": "mixed",
+        "ceo": "live",
         "checkin": "live",
         "school": "live",
+        "login": "live",
     }
+
+
+def list_notifications_paginated(
+    category: Optional[str] = None,
+    include_resolved: bool = False,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple:
+    with get_db() as conn:
+        q = "SELECT * FROM notifications WHERE 1=1"
+        count_q = "SELECT COUNT(*) FROM notifications WHERE 1=1"
+        args: List[Any] = []
+        if not include_resolved:
+            clause = " AND resolved = 0 AND (snoozed_until IS NULL OR snoozed_until < ?)"
+            q += clause
+            count_q += clause
+            args.append(_now_iso())
+        if category:
+            q += " AND category = ?"
+            count_q += " AND category = ?"
+            args.append(category)
+        total = conn.execute(count_q, args).fetchone()[0]
+        q += " ORDER BY resolved ASC, read ASC, id DESC LIMIT ? OFFSET ?"
+        rows = conn.execute(q, args + [limit, offset]).fetchall()
+    return [_notif_row(r) for r in rows], total
+
+
+def list_payments_paginated(
+    status: Optional[str] = None, limit: int = 50, offset: int = 0
+) -> tuple:
+    all_items = list_payments(status)
+    return all_items[offset : offset + limit], len(all_items)
+
+
+def create_payment(
+    school_id: int,
+    amount_pkr: int,
+    due_date: str,
+    description: str = "",
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    with get_db() as conn:
+        cur = conn.execute(
+            """INSERT INTO payments (school_id, amount_pkr, status, due_date, paid_at, description, created_at)
+               VALUES (?, ?, 'pending', ?, NULL, ?, ?)""",
+            (school_id, amount_pkr, due_date, description, _now_iso()),
+        )
+        pid = cur.lastrowid
+        row = conn.execute(
+            """SELECT p.*, s.name AS school_name FROM payments p
+               JOIN schools s ON s.id = p.school_id WHERE p.id = ?""",
+            (pid,),
+        ).fetchone()
+        conn.execute(
+            "INSERT INTO audit_log (user_id, action, entity, detail, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, "create", "payment", f"id={pid}", _now_iso()),
+        )
+    return {
+        "id": row["id"],
+        "school_id": row["school_id"],
+        "school_name": row["school_name"],
+        "amount_pkr": row["amount_pkr"],
+        "amount_display": f"₨{row['amount_pkr']:,}",
+        "status": row["status"],
+        "due_date": row["due_date"],
+        "paid_at": row["paid_at"],
+        "description": row["description"],
+        "days_overdue": 0,
+        "data_source": "live",
+    }
+
+
+def mark_payment_paid(payment_id: int, user_id: Optional[int] = None) -> bool:
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE payments SET status = 'paid', paid_at = ? WHERE id = ?",
+            (_now_iso(), payment_id),
+        )
+        if cur.rowcount:
+            conn.execute(
+                "INSERT INTO audit_log (user_id, action, entity, detail, created_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, "paid", "payment", f"id={payment_id}", _now_iso()),
+            )
+        return cur.rowcount > 0
+
+
+def update_school(
+    school_id: int,
+    *,
+    enrolled: Optional[int] = None,
+    mou_status: Optional[str] = None,
+    next_session: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    fields, values = [], []
+    if enrolled is not None:
+        fields.append("enrolled = ?")
+        values.append(enrolled)
+    if mou_status is not None:
+        fields.append("mou_status = ?")
+        values.append(mou_status)
+    if next_session is not None:
+        fields.append("next_session = ?")
+        values.append(next_session)
+    if not fields:
+        return get_school(school_id)
+    fields.append("updated_at = ?")
+    values.append(_now_iso())
+    values.append(school_id)
+    with get_db() as conn:
+        conn.execute(f"UPDATE schools SET {', '.join(fields)} WHERE id = ?", values)
+    log_audit(user_id, "update", "school", f"id={school_id}")
+    return get_school(school_id)
+
+
+def attendance_export_csv(school_id: int) -> str:
+    school = get_school(school_id)
+    name = school["name"] if school else f"School {school_id}"
+    lines = ["school,date,present,total,attendance_pct"]
+    for s in list_sessions(school_id, limit=500):
+        lines.append(
+            f'"{name}",{s["session_date"]},{s["present"]},{s["total"]},{s["att"]}'
+        )
+    return "\n".join(lines) + "\n"
+
+
+def ceo_report_live() -> Dict[str, Any]:
+    schools = list_schools()
+    pay = payments_summary()
+    trainers = list_trainers()
+    import database as db_mod
+
+    actions = []
+    for p in list_payments("overdue"):
+        actions.append(f"Overdue: {p['school_name']} — {p['amount_display']} ({p['days_overdue']}d)")
+    for s in schools:
+        if s.get("mou_status") == "renewal":
+            actions.append(f"MOU renewal: {s['name']}")
+    for inv in db_mod.list_inventory():
+        if inv["status"] in ("low", "critical"):
+            actions.append(f"Stock {inv['status']}: {inv['name']} — {inv['quantity']}/{inv['threshold']}")
+
+    return {
+        "subject": f"RoboClub Ops Digest — {date.today().isoformat()}",
+        "from_addr": "ops@roboclub.pk",
+        "to_addr": "ceo@roboclub.de",
+        "generated": _now_iso(),
+        "sections": {
+            "business_summary": [
+                f"{len(schools)} schools · avg attendance {avg_attendance_today()}%",
+                f"Outstanding: {pay['outstanding_display']}",
+                f"{len(trainers)} trainers in system",
+            ],
+            "action_required": actions[:8] or ["No critical actions"],
+            "wins": [
+                p["school_name"] + " paid " + p["amount_display"]
+                for p in list_payments() if p["status"] == "paid"
+            ][:5],
+            "team_update": [f"Active trainers: {sum(1 for t in trainers if t['status']=='active')}"],
+        },
+        "pipeline_health": {"data_source": "live", "database": "sqlite"},
+        "schedule": [
+            {"freq": "Daily", "time": "8:00 AM PKT", "content": "Attendance + payments"},
+            {"freq": "Weekly", "time": "Mon 9:00 AM PKT", "content": "Full ops digest"},
+        ],
+    }
+
+

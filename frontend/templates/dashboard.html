@@ -1,111 +1,52 @@
 {% extends "base.html" %}
 {% block title %} · Dashboard{% endblock %}
-
 {% block content %}
 <div class="page-header">
   <div class="page-eyebrow">LIVE DASHBOARD</div>
-  <h2 class="page-title">Co-Founder Operations View <span id="page-source-badge" class="page-badge page-badge--mixed">Mixed</span></h2>
-  <p class="page-sub">Action-first · live attendance, payments, inventory</p>
+  <h2 class="page-title">Co-Founder Operations <span id="page-source-badge" class="page-badge page-badge--live">Live</span></h2>
 </div>
-
-<div class="g3 mb20" id="ops-priority">
-  <div class="stat-card" style="border-left:3px solid var(--cyan)">
-    <div class="stat-card__label">Attendance today (avg)</div>
-    <div class="stat-card__val" id="ops-att" style="color:var(--cyan)">—</div>
-    <div class="stat-card__sub" style="color:var(--muted)">Live schools</div>
-  </div>
-  <div class="stat-card" style="border-left:3px solid var(--red)">
-    <div class="stat-card__label">Overdue payments</div>
-    <div class="stat-card__val" id="ops-overdue" style="color:var(--red)">—</div>
-    <div class="stat-card__sub"><a href="/payments" style="color:var(--red)">View invoices →</a></div>
-  </div>
-  <div class="stat-card" style="border-left:3px solid var(--yellow)">
-    <div class="stat-card__label">Inventory alerts</div>
-    <div class="stat-card__val" id="ops-inv" style="color:var(--yellow)">—</div>
-    <div class="stat-card__sub"><a href="/inventory" style="color:var(--yellow)">Reorder →</a></div>
-  </div>
-</div>
-
-<div id="kpi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px">
-  <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
-</div>
-
-<div class="panel">
-  <div class="section-title">
-    <span class="section-title__icon">🏫</span>
-    <span class="section-title__text">School Live Status</span>
-    <div class="section-title__line"></div>
-  </div>
-  <div id="school-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
-    <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted)"><span class="loader"></span></div>
-  </div>
-</div>
+<div class="g3 mb20" id="ops-priority"></div>
+<div id="kpi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px"></div>
+<div class="panel"><div id="school-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div></div>
 {% endblock %}
-
 {% block scripts %}
 <script>
 const KPI_META = {
-  active_schools:   {label:"Active Schools",   sub:"Live DB",  color:"var(--cyan)",   icon:"🏫"},
-  students_live:    {label:"Students (Live)",  sub:"Enrolled", color:"var(--purple)", icon:"🧒"},
-  trainers_online:  {label:"Trainers Online",  sub:"Live DB",  color:"var(--green)",  icon:"👨‍🏫"},
-  revenue_apr:      {label:"Revenue (Apr) ₨",  sub:"Demo KPI", color:"var(--green)",  icon:"💰"},
-  inventory_alerts: {label:"Inventory Alerts", sub:"Live",     color:"var(--yellow)", icon:"📦", link:"/inventory"},
-  pending_mous:     {label:"Pending MOUs",     sub:"Live",     color:"var(--red)",    icon:"📄"},
-  outstanding_pkr:  {label:"Outstanding ₨",   sub:"Live",     color:"var(--yellow)", icon:"⏳", link:"/payments"},
-  new_leads:        {label:"New Leads",        sub:"Demo",     color:"var(--cyan)",   icon:"📣"},
+  active_schools:{l:"Active Schools",c:"var(--cyan)",i:"🏫"},
+  students_live:{l:"Students",c:"var(--purple)",i:"🧒"},
+  trainers_online:{l:"Trainers",c:"var(--green)",i:"👨‍🏫"},
+  revenue_apr:{l:"Revenue (Apr)",c:"var(--green)",i:"💰"},
+  inventory_alerts:{l:"Inventory Alerts",c:"var(--yellow)",i:"📦"},
+  pending_mous:{l:"Pending MOUs",c:"var(--red)",i:"📄"},
+  outstanding_pkr:{l:"Outstanding",c:"var(--yellow)",i:"⏳"},
+  new_leads:{l:"New Leads",c:"var(--cyan)",i:"📣"},
 };
-
-const STATUS_COLOR = {green:"var(--green)", yellow:"var(--yellow)", cyan:"var(--cyan)", muted:"var(--muted)"};
-
-async function loadDashboard() {
-  const [kpis, schools, ops] = await Promise.all([
-    api('/api/dashboard/kpis'),
-    api('/api/dashboard/schools'),
-    api('/api/dashboard/ops'),
-  ]);
-  if (ops) {
-    document.getElementById('ops-att').textContent = ops.attendance_avg + '%';
-    document.getElementById('ops-overdue').textContent = ops.overdue_total_display;
-    document.getElementById('ops-inv').textContent = ops.inventory_alerts;
-  }
-  if (kpis) {
-    document.getElementById('kpi-grid').innerHTML = Object.entries(KPI_META).map(([key, m]) => `
-      <div class="panel" style="border-left:3px solid ${m.color}">
-        <div style="font-size:20px;margin-bottom:8px">${m.icon}</div>
-        <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:${m.color}">${kpis[key]}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">${m.label}</div>
-        <div style="font-size:11px;color:${m.color};margin-top:2px">${m.sub}</div>
-      </div>`).join('');
-  }
-  if (schools) renderSchools(schools);
+function renderHome(d) {
+  document.getElementById('ops-priority').innerHTML = `
+    <div class="stat-card" style="border-left:3px solid var(--cyan)"><div class="stat-card__label">Attendance avg</div>
+      <div class="stat-card__val" style="color:var(--cyan)">${d.ops.attendance_avg}%</div></div>
+    <div class="stat-card" style="border-left:3px solid var(--red)"><div class="stat-card__label">Overdue</div>
+      <div class="stat-card__val" style="color:var(--red)">${d.ops.overdue_total_display}</div></div>
+    <div class="stat-card" style="border-left:3px solid var(--yellow)"><div class="stat-card__label">Stock alerts</div>
+      <div class="stat-card__val" style="color:var(--yellow)">${d.ops.inventory_alerts}</div></div>`;
+  document.getElementById('kpi-grid').innerHTML = Object.entries(KPI_META).map(([k,m]) => `
+    <div class="panel" style="border-left:3px solid ${m.c}"><div>${m.i}</div>
+      <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:${m.c}">${d.kpis[k]}</div>
+      <div style="font-size:12px;color:var(--muted)">${m.l}</div></div>`).join('');
+  renderSchools(d.schools);
+  if (d.critical) renderCritical(d.critical);
+  setBadgeCount(d.unread_count);
 }
-
 function renderSchools(schools) {
-  document.getElementById('school-grid').innerHTML = schools.map(s => {
-    const c = STATUS_COLOR[s.status] || 'var(--muted)';
-    return `
+  const SC = {green:"var(--green)",yellow:"var(--yellow)",cyan:"var(--cyan)",muted:"var(--muted)"};
+  document.getElementById('school-grid').innerHTML = (schools||[]).map(s => `
     <a href="/school?id=${s.id}" style="text-decoration:none;color:inherit">
-    <div style="background:rgba(255,255,255,.02);border:1px solid ${c}33;border-radius:10px;padding:12px 14px">
-      <div class="row-between"><div style="font-weight:700;font-size:13px">${s.name}</div>
-        <span class="tag tag--${s.data_source==='live'?'green':'purple'}">${s.data_source || 'live'}</span></div>
-      <div style="font-size:11px;color:var(--muted);margin:8px 0">${s.city}</div>
-      <div class="row-between" style="font-size:11px"><span style="color:var(--muted)">Attendance</span>
-        <span style="color:${c};font-family:var(--mono);font-weight:700">${s.att || 0}%</span></div>
-      ${s.total ? `<div class="row-between" style="font-size:11px"><span style="color:var(--muted)">Present</span>
-        <span style="font-family:var(--mono)">${s.present}/${s.total}</span></div>` : ''}
-    </div></a>`;
-  }).join('') || '<p style="color:var(--muted);padding:20px">No schools yet. Use Check-in to record a session.</p>';
+    <div style="padding:12px;border:1px solid ${SC[s.status]||'var(--border)'}33;border-radius:10px">
+      <div style="font-weight:700">${s.name}</div>
+      <div style="font-size:11px;color:var(--muted)">${s.city} · ${s.att}% · ${s.present}/${s.total}</div>
+    </div></a>`).join('') || '<p style="color:var(--muted)">No schools</p>';
 }
-
-loadDashboard();
-if (USE_POLLING) {
-  window.addEventListener('roboclub:tick', ev => {
-    if (ev.detail?.attendance?.schools) renderSchools(ev.detail.attendance.schools);
-  });
-} else {
-  const attEs = new EventSource(API + '/api/attendance/stream');
-  attEs.onmessage = ev => { const d = JSON.parse(ev.data); if (d.schools) renderSchools(d.schools); };
-}
-setInterval(loadDashboard, 12000);
+api('/api/v1/bundle/home').then(d => d && renderHome(d));
+window.addEventListener('roboclub:tick', e => { if (e.detail?.schools) renderSchools(e.detail.schools); });
 </script>
 {% endblock %}

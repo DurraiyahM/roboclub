@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -622,8 +622,18 @@ def inventory_get(item_id: int):
     return item
 
 
+def _require_ops(authorization: Optional[str] = Header(None)):
+    from auth import parse_token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Login required")
+    user = parse_token(authorization[7:])
+    if not user or user["role"] not in ("ops",):
+        raise HTTPException(403, "Ops role required")
+    return user
+
+
 @app.post("/api/inventory", tags=["Inventory"])
-def inventory_create(body: InventoryCreate):
+def inventory_create(body: InventoryCreate, _user=Depends(_require_ops)):
     try:
         return db.create_inventory(
             body.sku, body.name, body.quantity, body.threshold, body.unit
@@ -635,7 +645,7 @@ def inventory_create(body: InventoryCreate):
 
 
 @app.put("/api/inventory/{item_id}", tags=["Inventory"])
-def inventory_update(item_id: int, body: InventoryUpdate):
+def inventory_update(item_id: int, body: InventoryUpdate, _user=Depends(_require_ops)):
     item = db.update_inventory(
         item_id,
         name=body.name,
@@ -649,7 +659,7 @@ def inventory_update(item_id: int, body: InventoryUpdate):
 
 
 @app.post("/api/inventory/{item_id}/adjust", tags=["Inventory"])
-def inventory_adjust(item_id: int, body: InventoryAdjust):
+def inventory_adjust(item_id: int, body: InventoryAdjust, _user=Depends(_require_ops)):
     item = db.adjust_inventory(item_id, body.delta)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")

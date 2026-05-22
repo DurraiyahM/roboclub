@@ -1,63 +1,39 @@
 {% extends "base.html" %}
 {% block title %} · Check-in{% endblock %}
 {% block content %}
-<div class="page-header">
-  <div class="page-eyebrow">TRAINER</div>
-  <h2 class="page-title">Session Check-in <span id="page-source-badge" class="page-badge page-badge--live">Live</span></h2>
-  <p class="page-sub">Mobile-friendly · saved to database</p>
-</div>
+<div class="page-header"><h2 class="page-title">Check-in <span class="page-badge page-badge--live">Live</span></h2></div>
 <div class="panel" style="max-width:480px">
-  <label style="font-size:11px;color:var(--muted)">School</label>
-  <select id="school-id" class="search-input" style="margin:6px 0 12px;width:100%"></select>
-  <label style="font-size:11px;color:var(--muted)">Present</label>
-  <input id="present" type="number" class="search-input" style="margin:6px 0 12px;width:100%" value="30" />
-  <label style="font-size:11px;color:var(--muted)">Total enrolled</label>
-  <input id="total" type="number" class="search-input" style="margin:6px 0 16px;width:100%" value="40" />
-  <label style="font-size:11px;color:var(--muted)">Batch</label>
-  <input id="batch" class="search-input" style="margin:6px 0 16px;width:100%" value="Batch A" />
-  <button class="btn btn--green" style="width:100%;padding:14px;font-size:14px" onclick="submitCheckin()">Submit check-in</button>
-  <p id="checkin-msg" style="margin-top:12px;font-size:12px;color:var(--green);display:none"></p>
+  <select id="school-id" class="search-input" style="width:100%;margin-bottom:10px"></select>
+  <input id="present" type="number" class="search-input" style="width:100%;margin-bottom:10px" value="30" />
+  <input id="total" type="number" class="search-input" style="width:100%;margin-bottom:10px" value="40" />
+  <button class="btn btn--green" style="width:100%;padding:14px" onclick="submit()">Submit</button>
+  <p id="msg" style="margin-top:12px;color:var(--green);font-size:12px"></p>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
-async function loadSchools() {
-  const schools = await api('/api/v1/schools');
-  const sel = document.getElementById('school-id');
-  if (!schools) return;
-  sel.innerHTML = schools.filter(s => s.total > 0).map(s =>
-    `<option value="${s.id}" data-total="${s.total}">${s.name} (${s.city})</option>`
-  ).join('');
-  sel.onchange = () => {
-    const opt = sel.selectedOptions[0];
-    if (opt) document.getElementById('total').value = opt.dataset.total || 40;
-  };
-  sel.dispatchEvent(new Event('change'));
-}
-async function submitCheckin() {
-  const token = localStorage.getItem('roboclub_token');
-  if (!token) { location.href = '/login'; return; }
-  const body = {
-    school_id: parseInt(document.getElementById('school-id').value, 10),
-    present: parseInt(document.getElementById('present').value, 10),
-    total: parseInt(document.getElementById('total').value, 10),
-    batch_name: document.getElementById('batch').value,
-  };
-  try {
-    const r = await fetch(API + '/api/v1/attendance/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) throw new Error();
+api('/api/v1/bundle/checkin').then(d => {
+  if (!d) return;
+  document.getElementById('school-id').innerHTML = d.schools.filter(s=>s.total>0).map(s=>
+    `<option value="${s.id}">${s.name}</option>`).join('');
+});
+async function submit() {
+  const t = localStorage.getItem('roboclub_token');
+  if (!t) { location.href='/login'; return; }
+  const r = await fetch(API+'/api/v1/attendance/sessions', {
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},
+    body: JSON.stringify({
+      school_id: +document.getElementById('school-id').value,
+      present: +document.getElementById('present').value,
+      total: +document.getElementById('total').value,
+    }),
+  });
+  const msg = document.getElementById('msg');
+  if (r.ok) {
     const d = await r.json();
-    const msg = document.getElementById('checkin-msg');
-    msg.style.display = 'block';
-    msg.textContent = `Saved — ${d.session.att}% attendance (${d.session.present}/${d.session.total})`;
-  } catch (e) {
-    showApiError('Check-in failed. Login as trainer@roboclub.pk / trainer123');
-  }
+    msg.textContent = `Saved ${d.session.att}% (${d.session.present}/${d.session.total})`;
+  } else msg.textContent = 'Failed — login as trainer@roboclub.pk';
 }
-loadSchools();
 </script>
 {% endblock %}

@@ -223,13 +223,17 @@
       <div class="logo-sub">DATA PIPELINE · PAKISTAN</div>
     </div>
     <div class="sidebar-nav">
-      {% for n in nav %}
+      <div style="font-size:9px;color:var(--dim);padding:8px 20px 4px;font-family:var(--mono);letter-spacing:2px">OPERATIONS</div>
+      {% for n in ops_nav %}
       <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}">
-        <span>{{ n.icon }}</span>
-        {{ n.label }}
-        {% if n.id == 'notifications' %}
-        <span class="nav-badge" id="notif-badge" style="display:none">0</span>
-        {% endif %}
+        <span>{{ n.icon }}</span>{{ n.label }}
+        {% if n.id == 'notifications' %}<span class="nav-badge" id="notif-badge" style="display:none">0</span>{% endif %}
+      </a>
+      {% endfor %}
+      <div style="font-size:9px;color:var(--dim);padding:12px 20px 4px;font-family:var(--mono);letter-spacing:2px">ARCHITECTURE (DEMO)</div>
+      {% for n in demo_nav %}
+      <a href="/{{ n.id }}" class="nav-btn {% if current_page == n.id %}active{% endif %}">
+        <span>{{ n.icon }}</span>{{ n.label }}
       </a>
       {% endfor %}
     </div>
@@ -340,28 +344,15 @@
   }
 
   refreshBadge();
-
-  if (USE_POLLING) {
-    setInterval(async () => {
-      const tick = await api('/api/live/tick');
-      if (!tick) return;
-      window.dispatchEvent(new CustomEvent('roboclub:tick', { detail: tick }));
-      if (typeof tick.count === 'number') setBadgeCount(tick.count);
-      else if (tick.notification) refreshBadge();
-    }, 4000);
-    setInterval(refreshBadge, 20000);
-  } else {
+  if (!USE_POLLING) {
     try {
       const notifEs = new EventSource(API + '/api/notifications/stream');
       notifEs.onmessage = ev => {
         const d = JSON.parse(ev.data);
-        if (d.event === 'init' && typeof d.count === 'number') setBadgeCount(d.count);
-        if (d.event === 'notification' && typeof d.count === 'number') setBadgeCount(d.count);
+        if (typeof d.count === 'number') setBadgeCount(d.count);
       };
       notifEs.onerror = () => setInterval(refreshBadge, 10000);
-    } catch (_) {
-      setInterval(refreshBadge, 10000);
-    }
+    } catch (_) { setInterval(refreshBadge, 10000); }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -377,7 +368,7 @@
     return `<div class="cpu-track"><div class="cpu-bar ${cls}" style="width:${pct}%"></div></div>`;
   }
 </script>
-<script src="/js/core.js"></script>
+<script src="/js/app.js"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
