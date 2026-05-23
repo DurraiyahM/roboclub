@@ -500,98 +500,56 @@ def meta_pages():
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 
-
 @app.get("/api/dashboard/kpis", tags=["Dashboard"])
 def dashboard_kpis():
     _tick["val"] += 1
     t = _tick["val"]
-
-    # Fall back to seed constants when DB is empty (Vercel cold start)
-    trainers = store.list_trainers() or TRAINERS
+    trainers = store.list_trainers()
     active_trainers = sum(1 for tr in trainers if tr["status"] == "active")
-
-    schools = _schools_state if _schools_state else SCHOOLS_SEED
+    pay = store.payments_summary()
+    schools = store.list_schools()
     students = sum(s["total"] for s in schools)
-
-    try:
-        pay = store.payments_summary()
-        outstanding = pay["outstanding_display"]
-        overdue_count = pay["overdue_count"]
-    except Exception:
-        outstanding = "₨28L"
-        overdue_count = 1
-
-    try:
-        att_avg = store.avg_attendance_today()
-    except Exception:
-        att_avg = round(
-            sum(s["att"] for s in schools if s["att"] > 0)
-            / max(1, sum(1 for s in schools if s["att"] > 0))
-        )
-
-    pending_mous = sum(
-        1 for s in schools
-        if s.get("mou_status") in ("pending", "renewal")
-        or any(x in str(s.get("mou", "")) for x in ("⚠", "⏳", "📄"))
-    )
-
     return {
-        "active_schools":    len([s for s in schools if s.get("att", 0) > 0 or s.get("status") != "muted"]),
+        "active_schools":    len(schools),
         "students_live":     students + t,
         "trainers_online":   f"{active_trainers}/{len(trainers)}",
         "revenue_apr":       f"₨{(9100000 + t * 5000) // 100000}L",
         "inventory_alerts":  db.count_inventory_alerts(),
-        "pending_mous":      pending_mous,
-        "outstanding_pkr":   outstanding,
+        "pending_mous":      sum(1 for s in schools if s.get("mou_status") in ("pending", "renewal")),
+        "outstanding_pkr":   pay["outstanding_display"],
         "new_leads":         73,
-        "attendance_avg":    att_avg,
-        "overdue_count":     overdue_count,
+        "attendance_avg":    store.avg_attendance_today(),
+        "overdue_count":     pay["overdue_count"],
     }
 
 
 @app.get("/api/dashboard/ops", tags=["Dashboard"])
 def dashboard_ops():
-    try:
-        pay = store.payments_summary()
-        overdue_display = f"₨{pay['overdue_total_pkr']:,}"
-        overdue_count = pay["overdue_count"]
-    except Exception:
-        overdue_display = "₨28,00,000"
-        overdue_count = 1
-
-    try:
-        att_avg = store.avg_attendance_today()
-    except Exception:
-        schools = _schools_state or SCHOOLS_SEED
-        att_avg = round(
-            sum(s["att"] for s in schools if s["att"] > 0)
-            / max(1, sum(1 for s in schools if s["att"] > 0))
-        )
-
+    pay = store.payments_summary()
     return {
-        "attendance_avg":        att_avg,
-        "overdue_total_display": overdue_display,
-        "overdue_count":         overdue_count,
-        "inventory_alerts":      db.count_inventory_alerts(),
+        "attendance_avg": store.avg_attendance_today(),
+        "overdue_total_display": f"₨{pay['overdue_total_pkr']:,}",
+        "overdue_count": pay["overdue_count"],
+        "inventory_alerts": db.count_inventory_alerts(),
     }
 
 
 @app.get("/api/dashboard/schools", tags=["Dashboard"])
 def dashboard_schools():
-    return store.list_schools() or _schools_state or SCHOOLS_SEED
+    return store.list_schools()
 
 
 # ─── Trainers ─────────────────────────────────────────────────────────────────
 
-
 @app.get("/api/trainers", tags=["Trainers"])
 def get_all_trainers():
-    return store.list_trainers() or TRAINERS
+    return store.list_trainers()
 
 
 @app.get("/api/trainers/stats", tags=["Trainers"])
 def get_trainers_stats():
-    trainers = store.list_trainers() or TRAINERS    
+    """Get trainer statistics."""
+    trainers = store.list_trainers()
     active_trainers = sum(1 for t in trainers if t["status"] == "active")
     inactive_trainers = sum(1 for t in trainers if t["status"] == "inactive")
     avg_rating = sum(t["rating"] for t in trainers) / len(trainers) if trainers else 0
